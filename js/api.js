@@ -160,11 +160,11 @@ export async function login(apiUrl, username, password) {
   return data;
 }
 
-export async function register(apiUrl, username, password, nome) {
+export async function register(apiUrl, username, password, nome, invite) {
   const resp = await fetch(apiUrl + '/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, nome }),
+    body: JSON.stringify({ username, password, nome, invite }),
   });
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));

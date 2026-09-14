@@ -41,6 +41,25 @@ echo [container] build dell'immagine %IMMAGINE% ^(la prima volta ci mette qualch
 podman build -t %IMMAGINE% -f Containerfile . || goto :errore
 echo [container] immagine pronta.
 
+REM JWT_SECRET e' obbligatorio (il server esce subito se manca o e' troppo
+REM corto) e .env non viene letto da nessuno in questo progetto: va passato
+REM come variabile d'ambiente vera al container, non lasciato nell'immagine.
+REM Si condivide lo stesso backend\.env di start.bat, cosi' i token restano
+REM validi passando da una modalita' all'altra; se non esiste ancora lo si
+REM genera qui.
+if not exist "backend\.env" (
+    echo [container] creo backend\.env con JWT_SECRET generato
+    for /f %%A in ('node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"') do set "GEN_SECRET=%%A"
+    (
+        echo PORT=3001
+        echo JWT_SECRET=%GEN_SECRET%
+        echo OLLAMA_URL=http://localhost:11434
+    ) > "backend\.env"
+)
+for /f "tokens=1,* delims==" %%A in (backend\.env) do (
+    if not "%%A"=="" if not "%%A"=="REM" set "%%A=%%B"
+)
+
 echo.
 echo [container] avvio su http://127.0.0.1:%PORTA%
 echo [container] per fermarlo: chiudi questa finestra
@@ -49,7 +68,9 @@ REM --replace: un container omonimo gia' esistente ma spento (per esempio
 REM avviato a mano con -d, che non si cancella da solo) farebbe fallire il
 REM run con 'name already in use'. Qui lo si sostituisce, invece di dare un
 REM errore che non spiega cosa fare.
-podman run --rm --replace --name focus -p %PORTA%:3001 -v %VOLUME%:/app/data %IMMAGINE%
+podman run --rm --replace --name focus -p %PORTA%:3001 -v %VOLUME%:/app/data ^
+    -e "JWT_SECRET=%JWT_SECRET%" -e "INVITE_CODE=%INVITE_CODE%" -e "OLLAMA_URL=%OLLAMA_URL%" ^
+    %IMMAGINE%
 exit /b %ERRORLEVEL%
 
 :niente_podman

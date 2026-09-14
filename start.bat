@@ -25,9 +25,19 @@ if not exist "node_modules" (
     call "%~dp0build.bat" || goto :errore
 )
 
-if not exist ".env" if exist ".env.example" (
-    echo [start] creo .env da .env.example
-    copy /y ".env.example" ".env" >nul
+if not exist ".env" (
+    echo [start] creo .env con JWT_SECRET generato
+    for /f %%A in ('node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"') do set "GEN_SECRET=%%A"
+    (
+        echo PORT=%PORTA%
+        echo JWT_SECRET=%GEN_SECRET%
+        echo OLLAMA_URL=http://localhost:11434
+    ) > ".env"
+    echo [start] .env creato. Modifica per aggiungere INVITE_CODE se vuoi.
+)
+
+for /f "tokens=1,* delims==" %%A in (.env) do (
+    if not "%%A"=="" if not "%%A"=="REM" set "%%A=%%B"
 )
 
 echo.

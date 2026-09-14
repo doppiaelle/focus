@@ -12,7 +12,6 @@ echo "============================================"
 echo "  Focus by DoubleL — Deploy"
 echo "============================================"
 
-# Controlla podman
 if ! command -v podman &>/dev/null; then
   echo "[deploy] podman non trovato. Installalo:"
   echo "  sudo dnf install podman    # Fedora/RHEL"
@@ -37,7 +36,7 @@ else
   echo "[deploy] volume $VOLUME già presente"
 fi
 
-# Genera JWT_SECRET se non esiste
+# JWT_SECRET — generato una volta, riusato sempre
 SECRET_FILE="$HOME/.focus-jwt-secret"
 if [ ! -f "$SECRET_FILE" ]; then
   openssl rand -hex 32 > "$SECRET_FILE"
@@ -46,28 +45,44 @@ if [ ! -f "$SECRET_FILE" ]; then
 fi
 JWT_SECRET=$(cat "$SECRET_FILE")
 
-# Build immagine
+# INVITE_CODE — generato una volta, serve per registrare nuovi utenti
+INVITE_FILE="$HOME/.focus-invite-code"
+if [ ! -f "$INVITE_FILE" ]; then
+  openssl rand -hex 8 > "$INVITE_FILE"
+  chmod 600 "$INVITE_FILE"
+  echo "[deploy] INVITE_CODE generato in $INVITE_FILE"
+fi
+INVITE_CODE=$(cat "$INVITE_FILE")
+
 echo "[deploy] build immagine $IMMAGINE..."
 podman build -t "$IMMAGINE" -f Containerfile .
 
 echo ""
 echo "[deploy] avvio Focus su porta $PORTA"
 
-# Run in background con restart automatico
 podman run -d \
   --name "$CONTAINER" \
   --replace \
   -p "${PORTA}:3001" \
   -v "${VOLUME}:/app/data" \
   -e "JWT_SECRET=${JWT_SECRET}" \
+  -e "INVITE_CODE=${INVITE_CODE}" \
   -e "OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}" \
   --restart unless-stopped \
   "$IMMAGINE"
 
+IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
 echo ""
 echo "============================================"
 echo "  Focus è online!"
-echo "  URL:  http://$(hostname -I | awk '{print $1}'):${PORTA}"
-echo "  Logs: podman logs -f focus"
-echo "  Stop: podman stop focus"
+echo ""
+echo "  URL:          http://${IP}:${PORTA}"
+echo "  Invite code:  ${INVITE_CODE}"
+echo "  Logs:         podman logs -f focus"
+echo "  Stop:         podman stop focus"
+echo "============================================"
+echo ""
+echo "  Dai l'invite code solo a chi vuoi far registrare."
+echo "  Per cambiarlo: modifica $INVITE_FILE e rilancia."
 echo "============================================"

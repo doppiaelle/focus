@@ -17,7 +17,7 @@ COPY css/ dist/css/
 COPY js/ dist/js/
 COPY icons/ dist/icons/
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 ENV PORT=3001
 ENV DB_PATH=/app/data/focus.db
@@ -26,5 +26,6 @@ EXPOSE 3001
 
 VOLUME /app/data
 
+USER node
 WORKDIR /app/backend
 CMD ["node", "server.js"]

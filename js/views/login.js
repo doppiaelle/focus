@@ -48,7 +48,11 @@ export async function render(container) {
             </div>
             <div class="form-group">
               <label class="form-label">Password</label>
-              <input type="password" id="reg-pass" class="input-field" placeholder="minimo 6 caratteri" autocomplete="new-password">
+              <input type="password" id="reg-pass" class="input-field" placeholder="minimo 8 caratteri" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Codice invito</label>
+              <input type="text" id="reg-invite" class="input-field" placeholder="Chiedi al proprietario del server" autocomplete="off">
             </div>
             <div id="reg-error" style="display:none;color:var(--danger);font-size:var(--font-sm);margin-bottom:var(--space-sm);text-align:center"></div>
             <button id="btn-register" class="btn btn-primary" style="width:100%;padding:14px;border-radius:var(--radius-md);font-weight:700;font-size:var(--font-md)">Registrati</button>
@@ -131,13 +135,14 @@ async function doRegister() {
   const nome = document.getElementById('reg-nome').value.trim();
   const username = document.getElementById('reg-user').value.trim();
   const password = document.getElementById('reg-pass').value;
+  const invite = document.getElementById('reg-invite').value.trim();
   const errorEl = document.getElementById('reg-error');
   const btn = document.getElementById('btn-register');
 
   errorEl.style.display = 'none';
   if (!server) { showError(errorEl, 'Inserisci l\'URL del server'); return; }
   if (!username || !password) { showError(errorEl, 'Inserisci username e password'); return; }
-  if (password.length < 6) { showError(errorEl, 'Password minimo 6 caratteri'); return; }
+  if (password.length < 8) { showError(errorEl, 'Password minimo 8 caratteri'); return; }
 
   btn.disabled = true;
   btn.textContent = 'Registrazione...';
@@ -146,7 +151,7 @@ async function doRegister() {
     const ok = await api.checkHealth(server);
     if (!ok) { showError(errorEl, 'Server non raggiungibile'); return; }
 
-    const data = await api.register(server, username, password, nome);
+    const data = await api.register(server, username, password, nome, invite);
     toast(`Account creato! Benvenuto, ${data.user.nome || username}!`);
     localStorage.removeItem('focus_offline_mode');
     window.location.hash = '/';

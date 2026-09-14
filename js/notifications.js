@@ -65,7 +65,8 @@ export async function checkAndNotify() {
   const dayAfter = new Date(today);
   dayAfter.setDate(dayAfter.getDate() + 2);
 
-  await checkEvents(today, tomorrow, dayAfter);
+  await checkEvents(now, today, tomorrow, dayAfter);
+  await checkTimeBasedReminders(now);
   await checkDeadlines(today);
   await checkDispensa();
   await checkSpending(today);
@@ -84,7 +85,7 @@ export async function checkOnDataChange(source) {
   }
 }
 
-async function checkEvents(today, tomorrow, dayAfter) {
+async function checkEvents(now, today, tomorrow, dayAfter) {
   const eventi = await db.getAll('eventi');
   for (const e of eventi) {
     const dates = expandRecurringDates(e, today, dayAfter);
@@ -100,6 +101,45 @@ async function checkEvents(today, tomorrow, dayAfter) {
         notify('Evento domani', `${e.titolo}${e.ora ? ' alle ' + e.ora : ''}${e.costo ? ' — €' + e.costo.toFixed(2) : ''}`);
         markNotified(key + '_tomorrow');
       }
+    }
+  }
+}
+
+async function checkTimeBasedReminders(now) {
+  const eventi = await db.getAll('eventi');
+  const todayStr = now.toISOString().slice(0, 10);
+
+  for (const e of eventi) {
+    if (!e.ora) continue;
+
+    const dates = [e.data.slice(0, 10)];
+    if (e.ricorrenza) {
+      let current = new Date(e.data);
+      for (let i = 0; i < 52; i++) {
+        current = nextOccurrence(current, e.ricorrenza);
+        dates.push(current.toISOString().slice(0, 10));
+        if (current > new Date(todayStr)) break;
+      }
+    }
+
+    if (!dates.includes(todayStr)) continue;
+
+    const [hours, minutes] = e.ora.split(':').map(Number);
+    const eventTime = new Date(now);
+    eventTime.setHours(hours, minutes, 0, 0);
+
+    const diffMinutes = (eventTime - now) / 60000;
+
+    const key60 = `evento_time_${e.id}_${todayStr}_60`;
+    if (diffMinutes > 55 && diffMinutes <= 65 && !wasNotified(key60)) {
+      notify('Tra 1 ora', `${e.titolo} alle ${e.ora}`);
+      markNotified(key60);
+    }
+
+    const key15 = `evento_time_${e.id}_${todayStr}_15`;
+    if (diffMinutes > 10 && diffMinutes <= 20 && !wasNotified(key15)) {
+      notify('Tra 15 minuti', `${e.titolo} alle ${e.ora}`);
+      markNotified(key15);
     }
   }
 }
@@ -219,7 +259,7 @@ function notify(title, body) {
   }
 }
 
-export function startPeriodicCheck(intervalMs = 1800000) {
+export function startPeriodicCheck(intervalMs = 300000) {
   checkAndNotify();
   setInterval(checkAndNotify, intervalMs);
 }

@@ -651,6 +651,26 @@
   font-weight: 600;
 }
 
+/* ─── Quantity Controls ─── */
+
+.qty-controls button:active {
+  transform: scale(0.85);
+}
+
+/* ─── Shopping Mode ─── */
+
+.shopping-item:active {
+  transform: scale(0.97) !important;
+  background: var(--bg-hover) !important;
+}
+
+/* ─── Suggestion Chips ─── */
+
+.suggestion-chip:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
 /* ─── Spesa Tag Buttons ─── */
 
 .btn-tag {
@@ -764,6 +784,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: var(--space-sm);
+}
+
+.stat-grid[style*="1fr 1fr"] {
+  grid-template-columns: 1fr 1fr;
 }
 
 .stat-card {

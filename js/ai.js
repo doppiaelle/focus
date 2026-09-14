@@ -30,7 +30,7 @@ export async function chat(userMessage) {
   const url = await getUrl();
   const model = await db.getSetting('ollama_model') || 'llama3.2';
 
-  const systemPrompt = `Sei NODO, un assistente personale italiano. L'utente ti racconta la sua giornata e tu devi estrarre azioni strutturate.
+  const systemPrompt = `Sei Focus, un assistente personale italiano creato da DoubleL. L'utente ti racconta la sua giornata e tu devi estrarre azioni strutturate.
 
 Rispondi SEMPRE in JSON con questo formato:
 {

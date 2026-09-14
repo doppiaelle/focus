@@ -245,7 +245,10 @@ function eventoHTML(evento, passato = false) {
         <div class="item-title">${evento.titolo}${ricBadge}</div>
         <div class="item-subtitle">${giorno}${ora ? ' · ' + ora : ''}${evento.luogo ? ' · ' + evento.luogo : ''}${costo ? ' · <span style="color:var(--danger);font-weight:600">' + costo + '</span>' : ''}</div>
       </div>
-      ${!evento._virtual ? `<button class="btn btn-ghost btn-icon delete-btn" data-id="${evento.id}" data-store="eventi" style="font-size:16px;color:var(--text-muted)">✕</button>` : ''}
+      <div style="display:flex;gap:4px;align-items:center">
+        ${!passato && !evento._virtual ? `<button class="btn btn-ghost btn-icon email-reminder-btn" data-id="${evento._originId || evento.id}" title="Invia promemoria email" style="font-size:14px;color:var(--accent)">✉️</button>` : ''}
+        ${!evento._virtual ? `<button class="btn btn-ghost btn-icon delete-btn" data-id="${evento.id}" data-store="eventi" style="font-size:16px;color:var(--text-muted)">✕</button>` : ''}
+      </div>
     </div>
   `;
 }
@@ -288,7 +291,36 @@ function scadenzaHTML(scadenza, now) {
   `;
 }
 
+function sendEmailReminder(evento) {
+  const d = new Date(evento.data);
+  const dataStr = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const subject = encodeURIComponent(`Promemoria: ${evento.titolo} — ${dataStr}`);
+
+  let body = `Promemoria da Focus\n\n`;
+  body += `📅 ${evento.titolo}\n`;
+  body += `📆 ${dataStr}\n`;
+  if (evento.ora) body += `🕐 Ore ${evento.ora}\n`;
+  if (evento.luogo) body += `📍 ${evento.luogo}\n`;
+  if (evento.costo) body += `💰 Costo: €${evento.costo.toFixed(2)}\n`;
+  if (evento.note) body += `📝 Note: ${evento.note}\n`;
+  if (evento.ricorrenza) body += `🔁 Ricorrenza: ${evento.ricorrenza}\n`;
+  body += `\n— Inviato da Focus by DoubleL`;
+
+  const mailto = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
+  window.open(mailto, '_blank');
+  toast('Email promemoria aperta');
+}
+
 function bindEventListeners(container, store) {
+  container.querySelectorAll('.email-reminder-btn').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = Number(el.dataset.id);
+      const evento = await db.get('eventi', id);
+      if (evento) sendEmailReminder(evento);
+    });
+  });
+
   container.querySelectorAll('.delete-btn').forEach(el => {
     el.addEventListener('click', async (e) => {
       e.stopPropagation();

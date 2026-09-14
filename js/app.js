@@ -2,7 +2,7 @@ import { open } from './db.js';
 import { register, init as initRouter } from './router.js';
 import { render as renderNavbar } from './components/navbar.js';
 
-const V = '?v=18';
+const V = '?v=20';
 
 function initTheme() {
   try {
@@ -32,7 +32,6 @@ async function boot() {
   register('/finanze', (c) => { finanzeView(c); return { destroy: finanzeDestroy }; });
   register('/settings', (c) => { settingsView(c); });
 
-  // Redirect /altro to /spesa
   register('/altro', () => { window.location.hash = '/spesa'; });
 
   const navbar = document.getElementById('navbar');

@@ -2,6 +2,7 @@ import * as db from '../db.js';
 import { parseMessage } from '../parser.js';
 import * as ai from '../ai.js';
 import { emit } from '../store.js';
+import { show as toast } from '../components/toast.js';
 
 let ollamaAvailable = false;
 let recognition = null;
@@ -28,9 +29,14 @@ export async function render(container) {
           <h1>Chat</h1>
           <p id="ai-status"><span class="status-dot offline"></span> Verifica connessione...</p>
         </div>
-        <button id="tts-toggle" class="btn-circle btn-circle-sm" title="Attiva/disattiva voce">
-          <svg id="tts-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        </button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="clear-chat" class="btn-circle btn-circle-sm" title="Pulisci chat" style="background:var(--bg-input);border:1px solid var(--border)">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+          <button id="tts-toggle" class="btn-circle btn-circle-sm" title="Attiva/disattiva voce" style="background:var(--bg-input);border:1px solid var(--border)">
+            <svg id="tts-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </button>
+        </div>
       </div>
       <div id="chat-messages" style="flex:1;overflow-y:auto;padding:var(--space-sm) 0 72px"></div>
       <div id="chat-toast" class="chat-toast"></div>
@@ -61,7 +67,20 @@ export async function render(container) {
     ttsEnabled = !ttsEnabled;
     const icon = document.getElementById('tts-icon');
     icon.style.opacity = ttsEnabled ? '1' : '0.3';
-    showToast(ttsEnabled ? 'Voce attivata' : 'Voce disattivata');
+    showChatToast(ttsEnabled ? 'Voce attivata' : 'Voce disattivata');
+  });
+
+  document.getElementById('clear-chat').addEventListener('click', async () => {
+    const msgs = await db.getAll('messages');
+    if (msgs.length === 0) {
+      showChatToast('La chat è già vuota');
+      return;
+    }
+    if (!confirm(`Eliminare ${msgs.length} messaggi?`)) return;
+    await db.clear('messages');
+    showChatToast('Chat pulita');
+    messagesEl.innerHTML = '';
+    showSuggestionChips(messagesEl, input, form);
   });
 
   if (hasSpeech) {
@@ -76,7 +95,13 @@ export async function render(container) {
   if (messages.length === 0) {
     showSuggestionChips(messagesEl, input, form);
   } else {
+    let lastDate = null;
     for (const msg of messages) {
+      const msgDate = new Date(msg.timestamp).toLocaleDateString('it-IT');
+      if (msgDate !== lastDate) {
+        appendDateSeparator(messagesEl, msg.timestamp);
+        lastDate = msgDate;
+      }
       appendMessage(messagesEl, msg);
     }
     scrollToBottom(messagesEl);
@@ -94,12 +119,12 @@ export async function render(container) {
   input.focus();
 }
 
-function showToast(text) {
-  const toast = document.getElementById('chat-toast');
-  if (!toast) return;
-  toast.textContent = text;
-  toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 2500);
+function showChatToast(text) {
+  const toastEl = document.getElementById('chat-toast');
+  if (!toastEl) return;
+  toastEl.textContent = text;
+  toastEl.classList.add('visible');
+  setTimeout(() => toastEl.classList.remove('visible'), 2500);
 }
 
 async function processMessage(text, messagesEl) {
@@ -159,16 +184,24 @@ async function processMessage(text, messagesEl) {
 function speak(text) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  const cleanText = text.replace(/\*\*/g, '').replace(/[✅📅💰🛒]/g, '');
+  const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.lang = 'it-IT';
   utterance.rate = 1.05;
   utterance.pitch = 1;
 
-  const voices = window.speechSynthesis.getVoices();
-  const italian = voices.find(v => v.lang.startsWith('it'));
-  if (italian) utterance.voice = italian;
+  const setVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const italian = voices.find(v => v.lang.startsWith('it'));
+    if (italian) utterance.voice = italian;
+    window.speechSynthesis.speak(utterance);
+  };
 
-  window.speechSynthesis.speak(utterance);
+  if (window.speechSynthesis.getVoices().length > 0) {
+    setVoice();
+  } else {
+    window.speechSynthesis.onvoiceschanged = setVoice;
+  }
 }
 
 let silenceTimer = null;
@@ -221,13 +254,13 @@ function setupSpeechRecognition(input, form) {
           form.dispatchEvent(new Event('submit'));
           return;
         }
-        showToast('Nessun audio rilevato, riprova');
+        showChatToast('Nessun audio rilevato, riprova');
       } else if (event.error === 'not-allowed') {
-        showToast('Permesso microfono negato. Vai in Impostazioni > Safari > Microfono');
+        showChatToast('Permesso microfono negato');
       } else if (event.error === 'network') {
-        showToast('Errore di rete per il riconoscimento vocale');
+        showChatToast('Errore di rete per il riconoscimento vocale');
       } else if (event.error !== 'aborted') {
-        showToast('Microfono non disponibile');
+        showChatToast('Microfono non disponibile');
       }
       stopRecording();
     };
@@ -247,7 +280,7 @@ function setupSpeechRecognition(input, form) {
 
 function toggleRecording() {
   if (!recognition) {
-    showToast('Riconoscimento vocale non supportato su questo dispositivo');
+    showChatToast('Riconoscimento vocale non supportato su questo dispositivo');
     return;
   }
   if (isRecording) {
@@ -260,16 +293,14 @@ function toggleRecording() {
 
 function startRecording() {
   if (!recognition) {
-    showToast('Riconoscimento vocale non disponibile');
+    showChatToast('Riconoscimento vocale non disponibile');
     return;
   }
   try {
     isRecording = true;
     const btn = document.getElementById('mic-btn');
-    if (btn) {
-      btn.classList.add('recording');
-    }
-    showToast('Sto ascoltando...');
+    if (btn) btn.classList.add('recording');
+    showChatToast('Sto ascoltando...');
     recognition.start();
   } catch (e) {
     stopRecording();
@@ -277,11 +308,11 @@ function startRecording() {
       recognition.stop();
       setTimeout(() => {
         try { recognition.start(); isRecording = true; } catch (_) {
-          showToast('Errore avvio microfono');
+          showChatToast('Errore avvio microfono');
         }
       }, 200);
     } else {
-      showToast('Impossibile avviare il microfono');
+      showChatToast('Impossibile avviare il microfono');
     }
   }
 }
@@ -290,9 +321,7 @@ function stopRecording() {
   isRecording = false;
   if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
   const btn = document.getElementById('mic-btn');
-  if (btn) {
-    btn.classList.remove('recording');
-  }
+  if (btn) btn.classList.remove('recording');
 }
 
 async function checkAiStatus() {
@@ -306,7 +335,7 @@ async function checkAiStatus() {
     const model = await db.getSetting('ollama_model') || models[0] || 'llama3.2';
     statusEl.innerHTML = `<span class="status-dot online"></span> AI connessa (${model})`;
   } else {
-    statusEl.innerHTML = `<span class="status-dot offline"></span> Parser locale attivo`;
+    statusEl.innerHTML = `<span class="status-dot offline"></span> Assistente locale attivo`;
   }
 }
 
@@ -332,6 +361,16 @@ async function executeAiActions(actions) {
           descrizione: action.descrizione || null,
           data: new Date().toISOString()
         });
+        break;
+      case 'evento':
+        if (action.titolo && action.data) {
+          await db.add('eventi', {
+            titolo: action.titolo, data: action.data,
+            ora: action.ora || null, luogo: action.luogo || null,
+            tipo: action.tipo || 'personale', costo: action.costo || null,
+            ricorrenza: null, note: null
+          });
+        }
         break;
       case 'dispensa_add': {
         const items = await db.getAll('dispensa');
@@ -363,27 +402,29 @@ async function executeAiActions(actions) {
 
 function showSuggestionChips(messagesEl, input, form) {
   const suggestions = [
-    'latte 2 euro',
-    'compra pane e uova',
-    'ho speso 30 euro al supermercato',
-    'ho il dentista giovedì',
-    'ho comprato 3 banane a 1.50 euro',
-    'bolletta luce 45 euro'
+    { text: 'compra pane e uova', icon: '🍞' },
+    { text: 'latte 2 euro', icon: '🥛' },
+    { text: 'ho speso 30 euro al supermercato', icon: '💰' },
+    { text: 'ho il dentista giovedì', icon: '🏥' },
+    { text: 'è finito il latte', icon: '📦' },
+    { text: 'quanto ho speso?', icon: '📊' },
   ];
 
   messagesEl.innerHTML = `
     <div class="chat-chips-intro">
-      <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--text-muted)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <p>Dimmi cosa hai comprato, cosa devi comprare, o i tuoi impegni</p>
+      <div style="font-size:48px;margin-bottom:var(--space-md);opacity:0.3">💬</div>
+      <p style="font-size:var(--font-md);font-weight:600;color:var(--text-primary);margin-bottom:6px">Focus Chat</p>
+      <p>Dimmi cosa hai comprato, cosa devi comprare, o i tuoi impegni. Capisco il linguaggio naturale!</p>
     </div>
     <div class="chat-chips">
-      ${suggestions.map(s => `<button class="chat-chip" type="button">${s}</button>`).join('')}
+      ${suggestions.map(s => `<button class="chat-chip" type="button">${s.icon} ${s.text}</button>`).join('')}
     </div>
   `;
 
   messagesEl.querySelectorAll('.chat-chip').forEach(chip => {
     chip.addEventListener('click', () => {
-      input.value = chip.textContent;
+      const text = chip.textContent.replace(/^[^\s]+\s/, '').trim();
+      input.value = text;
       input.focus();
       messagesEl.innerHTML = '';
       form.dispatchEvent(new Event('submit'));
@@ -402,28 +443,73 @@ function formatBotText(text) {
     .replace(/(€[\d.,]+)/g, '<strong>$1</strong>');
 }
 
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function appendDateSeparator(container, timestamp) {
+  const div = document.createElement('div');
+  div.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:0.5px;text-transform:uppercase';
+  const d = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+
+  if (d.toDateString() === today.toDateString()) div.textContent = 'Oggi';
+  else if (d.toDateString() === yesterday.toDateString()) div.textContent = 'Ieri';
+  else div.textContent = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' });
+
+  container.appendChild(div);
+}
+
 function appendMessage(container, msg) {
   const div = document.createElement('div');
   const isUser = msg.sender === 'user';
   div.className = `chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-bot'}`;
+  div.dataset.id = msg.id;
+
   if (isUser) {
     div.textContent = msg.text;
   } else {
     div.innerHTML = formatBotText(msg.text);
   }
+
+  const timeEl = document.createElement('div');
+  timeEl.style.cssText = `font-size:10px;color:${isUser ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)'};margin-top:4px;text-align:${isUser ? 'right' : 'left'}`;
+  timeEl.textContent = formatTime(msg.timestamp);
+  div.appendChild(timeEl);
+
   if (msg.actions && msg.actions.length > 0 && !isUser) {
     const tags = document.createElement('div');
     tags.className = 'chat-action-tags';
     for (const a of msg.actions) {
       const tag = document.createElement('span');
       tag.className = 'chat-action-tag';
-      const icons = { spesa_add: '🛒', transazione: '💰', evento: '📅', scadenza: '⏰', dispensa_add: '🏠', dispensa_update: '🏠' };
+      const icons = { spesa_add: '🛒', spesa: '🛒', transazione: '💰', evento: '📅', scadenza: '⏰', dispensa_add: '🏠', dispensa_update: '🏠' };
       tag.textContent = `${icons[a.type] || '✓'} ${a.item || a.descrizione || a.titolo || ''}`.trim();
       tags.appendChild(tag);
     }
     div.appendChild(tags);
   }
+
+  div.addEventListener('long-press', () => deleteMessage(msg.id, div));
+  let pressTimer = null;
+  div.addEventListener('touchstart', (e) => {
+    pressTimer = setTimeout(() => deleteMessage(msg.id, div), 600);
+  }, { passive: true });
+  div.addEventListener('touchend', () => clearTimeout(pressTimer));
+  div.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
   container.appendChild(div);
+}
+
+async function deleteMessage(id, element) {
+  if (!confirm('Eliminare questo messaggio?')) return;
+  await db.del('messages', id);
+  element.style.transition = 'opacity 0.2s, transform 0.2s';
+  element.style.opacity = '0';
+  element.style.transform = 'scale(0.9)';
+  setTimeout(() => element.remove(), 200);
+  toast('Messaggio eliminato');
 }
 
 function appendTyping(container) {

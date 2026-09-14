@@ -1,6 +1,6 @@
 import * as db from '../db.js';
 
-const ALL_STORES = ['messages', 'spesa', 'dispensa', 'transazioni', 'eventi', 'scadenze', 'impostazioni'];
+const ALL_STORES = ['messages', 'spesa', 'dispensa', 'transazioni', 'eventi', 'scadenze', 'impostazioni', 'buoni_pasto'];
 
 export async function render(container) {
   const ollamaUrl = await db.getSetting('ollama_url') || 'http://localhost:11434';
@@ -78,8 +78,12 @@ export async function render(container) {
 
       <div class="section-title">Info</div>
       <div class="card">
-        <div class="item-subtitle">Focus v1.0.0</div>
-        <div class="item-subtitle" style="margin-top:4px">Il tuo hub personale intelligente</div>
+        <div style="text-align:center;padding:var(--space-sm) 0">
+          <div style="font-size:var(--font-lg);font-weight:800;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Focus</div>
+          <div class="item-subtitle" style="margin-top:4px">v2.1.0</div>
+          <div class="item-subtitle" style="margin-top:8px">Il tuo hub personale intelligente</div>
+          <div style="margin-top:12px;font-size:var(--font-xs);color:var(--text-muted);font-weight:600;letter-spacing:0.5px">by DoubleL</div>
+        </div>
       </div>
     </div>
   `;

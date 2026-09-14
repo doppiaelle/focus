@@ -1,6 +1,7 @@
 import * as db from '../db.js';
 import * as ai from '../ai.js';
 import { show as toast } from '../components/toast.js';
+import { getSuggestions } from '../suggestions.js';
 
 export async function render(container) {
   container.innerHTML = `
@@ -19,8 +20,10 @@ export async function render(container) {
         <input type="text" id="home-search" placeholder="Cerca prodotti, eventi, spese..." autocomplete="off">
       </div>
       <div id="search-results" style="display:none"></div>
+      <div id="home-today"></div>
       <div id="home-ai-status"></div>
       <div id="home-alerts"></div>
+      <div id="home-suggestions"></div>
       <div id="home-summary"></div>
       <div id="home-recent"></div>
     </div>
@@ -37,10 +40,10 @@ export async function render(container) {
     const q = searchInput.value.trim();
     if (q.length < 2) {
       searchResults.style.display = 'none';
-      document.getElementById('home-ai-status').style.display = '';
-      document.getElementById('home-alerts').style.display = '';
-      document.getElementById('home-summary').style.display = '';
-      document.getElementById('home-recent').style.display = '';
+      ['home-today','home-ai-status','home-alerts','home-suggestions','home-summary','home-recent'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
       return;
     }
     searchTimer = setTimeout(() => runSearch(q, searchResults), 200);
@@ -50,7 +53,9 @@ export async function render(container) {
   if (isEmpty) {
     showWelcomeCard();
   } else {
+    await loadTodayWidget();
     await loadDashboard();
+    await loadSmartSuggestions();
     await checkSpendingAlerts();
   }
 }
@@ -71,11 +76,15 @@ function showWelcomeCard() {
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
       </div>
       <h2>Benvenuto in Focus</h2>
-      <p>Il tuo hub personale. Dimmi cosa compri, cosa spendi, i tuoi impegni — organizzo tutto io. Prova a scrivere qualcosa in chat!</p>
-      <a href="#/chat" class="btn btn-primary">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Inizia a parlare
-      </a>
+      <p>Il tuo hub personale by <strong>DoubleL</strong>. Gestisci spesa, appuntamenti e finanze — tutto in un posto. Inizia aggiungendo qualcosa!</p>
+      <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;margin-top:var(--space-md)">
+        <a href="#/spesa" class="btn btn-primary" style="border-radius:var(--radius-full);padding:12px 24px">
+          🛒 Lista spesa
+        </a>
+        <a href="#/agenda" class="btn btn-ghost" style="border:1px solid var(--border);border-radius:var(--radius-full);padding:12px 24px">
+          📅 Agenda
+        </a>
+      </div>
     </div>
   `;
 }
@@ -102,6 +111,144 @@ async function checkAiStatus() {
   }
 }
 
+// ── Widget "Oggi" ──
+
+async function loadTodayWidget() {
+  const el = document.getElementById('home-today');
+  if (!el) return;
+
+  const now = new Date();
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const eventi = await db.getAll('eventi');
+  const spesa = await db.getAll('spesa');
+  const transazioni = await db.getAll('transazioni');
+  const scadenze = await db.getAll('scadenze');
+
+  const eventiOggi = eventi.filter(e => {
+    const d = new Date(e.data); d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  }).sort((a, b) => (a.ora || '').localeCompare(b.ora || ''));
+
+  const scadenzeOggi = scadenze.filter(s => {
+    if (s.completata) return false;
+    const d = new Date(s.data); d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  });
+
+  const daComprare = spesa.filter(i => !i.completato).length;
+
+  const speseOggi = transazioni.filter(t => {
+    const d = new Date(t.data); d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime() && t.tipo === 'uscita';
+  });
+  const totaleOggi = speseOggi.reduce((s, t) => s + t.importo, 0);
+
+  const items = [];
+
+  for (const e of eventiOggi) {
+    const icons = { appuntamento: '🏥', lavoro: '💼', personale: '👤', sport: '🏃', altro: '📌' };
+    items.push(`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+        <span style="font-size:18px">${icons[e.tipo] || '📌'}</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:var(--font-sm)">${e.titolo}</div>
+          ${e.ora ? `<div style="font-size:var(--font-xs);color:var(--accent)">${e.ora}${e.luogo ? ' · ' + e.luogo : ''}</div>` : ''}
+        </div>
+      </div>
+    `);
+  }
+
+  for (const s of scadenzeOggi) {
+    items.push(`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+        <span style="font-size:18px">⚠️</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:var(--font-sm);color:var(--danger)">${s.titolo} — scade oggi</div>
+        </div>
+      </div>
+    `);
+  }
+
+  const badges = [];
+  if (daComprare > 0) {
+    badges.push(`<a href="#/spesa" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--accent-soft);border-radius:var(--radius-full);font-size:var(--font-xs);font-weight:600;color:var(--accent);text-decoration:none">🛒 ${daComprare} da comprare</a>`);
+  }
+  if (totaleOggi > 0) {
+    badges.push(`<a href="#/finanze" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--danger-soft);border-radius:var(--radius-full);font-size:var(--font-xs);font-weight:600;color:var(--danger);text-decoration:none">💸 €${totaleOggi.toFixed(2)} spesi oggi</a>`);
+  }
+
+  if (items.length === 0 && badges.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const dayName = now.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  el.innerHTML = `
+    <div class="card" style="background:var(--gradient-card-indigo);margin-bottom:var(--space-md)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${items.length > 0 ? 'var(--space-sm)' : '0'}">
+        <div>
+          <div style="font-size:var(--font-xs);color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:1px">Oggi</div>
+          <div style="font-size:var(--font-sm);color:var(--text-secondary);margin-top:2px">${dayName.charAt(0).toUpperCase() + dayName.slice(1)}</div>
+        </div>
+        ${eventiOggi.length > 0 ? `<div style="font-size:var(--font-xl);font-weight:800;color:var(--accent)">${eventiOggi.length}</div>` : ''}
+      </div>
+      ${items.length > 0 ? `<div style="border-top:1px solid var(--border-light);padding-top:var(--space-sm)">${items.join('')}</div>` : ''}
+      ${badges.length > 0 ? `<div style="display:flex;gap:8px;flex-wrap:wrap;${items.length > 0 ? 'margin-top:var(--space-sm)' : ''}">${badges.join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+// ── Smart Suggestions ──
+
+async function loadSmartSuggestions() {
+  const el = document.getElementById('home-suggestions');
+  if (!el) return;
+
+  const suggestions = await getSuggestions(3);
+  if (suggestions.length === 0) { el.innerHTML = ''; return; }
+
+  const EMOJIS = {
+    banana: '🍌', banane: '🍌', mela: '🍎', mele: '🍎', latte: '🥛', pane: '🍞',
+    pasta: '🍝', uova: '🥚', pollo: '🍗', riso: '🍚', acqua: '💧', birra: '🍺',
+  };
+  function getEmoji(name) {
+    const n = name.toLowerCase();
+    for (const [k, v] of Object.entries(EMOJIS)) { if (n.includes(k)) return v; }
+    return '📦';
+  }
+
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;overflow-x:auto;margin-bottom:var(--space-md);-webkit-overflow-scrolling:touch">
+      ${suggestions.map(s => `
+        <button class="home-suggestion" data-nome="${s.nome}" style="flex-shrink:0;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;text-align:center;min-width:90px;transition:all 0.15s">
+          <div style="font-size:24px;margin-bottom:4px">${getEmoji(s.nome)}</div>
+          <div style="font-size:var(--font-xs);font-weight:600;color:var(--text-primary)">${s.nome}</div>
+          <div style="font-size:9px;color:var(--text-muted);margin-top:2px">${s.motivo.length > 20 ? s.motivo.slice(0, 18) + '...' : s.motivo}</div>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  el.querySelectorAll('.home-suggestion').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const nome = btn.dataset.nome;
+      await db.add('spesa', {
+        nome, quantita: 1, unita: null,
+        completato: false, dataAggiunta: new Date().toISOString(), dataCompletato: null
+      });
+      toast(`${nome} aggiunto alla spesa`);
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.background = 'var(--accent-soft)';
+      btn.style.pointerEvents = 'none';
+    });
+  });
+}
+
+// ── Dashboard ──
+
 async function loadDashboard() {
   const alertsEl = document.getElementById('home-alerts');
   const summaryEl = document.getElementById('home-summary');
@@ -112,6 +259,7 @@ async function loadDashboard() {
   const transazioni = await db.getAll('transazioni');
   const eventi = await db.getAll('eventi');
   const scadenze = await db.getAll('scadenze');
+  const buoni = await db.getAll('buoni_pasto');
 
   const daComprare = spesaItems.filter(i => !i.completato);
   const terminati = dispensaItems.filter(i => i.quantita === 0);
@@ -142,6 +290,13 @@ async function loadDashboard() {
   });
   const totalePrecedente = mesePrecedente.reduce((s, t) => s + t.importo, 0);
 
+  // Buoni pasto summary
+  const valoreBuono = (await db.getSetting('valore_buono_pasto')) || 8;
+  const totaleBuoniIniziali = (await db.getSetting('totale_buoni_pasto')) || 0;
+  const buoniAggiunti = buoni.filter(b => b.tipo === 'ricarica').reduce((s, b) => s + (b.quantita || 0), 0);
+  const buoniUsati = buoni.filter(b => b.tipo === 'utilizzo').reduce((s, b) => s + (b.quantita || 0), 0);
+  const buoniRimanenti = totaleBuoniIniziali + buoniAggiunti - buoniUsati;
+
   const alerts = [];
 
   if (terminati.length > 0) {
@@ -151,10 +306,6 @@ async function loadDashboard() {
   const scorteBasse = dispensaItems.filter(i => i.quantita !== null && i.quantita > 0 && i.quantita <= 1);
   if (scorteBasse.length > 0) {
     alerts.push({ icon: '~', text: `${scorteBasse.map(i => i.nome).join(', ')} quasi ${scorteBasse.length === 1 ? 'finito' : 'finiti'}`, type: 'warning' });
-  }
-
-  if (daComprare.length > 0) {
-    alerts.push({ icon: daComprare.length, text: `prodott${daComprare.length === 1 ? 'o' : 'i'} da comprare`, type: 'accent' });
   }
 
   const scaduta = scadenzeUrgenti.filter(s => new Date(s.data) < today);
@@ -208,13 +359,14 @@ async function loadDashboard() {
 
   const mese = now.toLocaleDateString('it-IT', { month: 'long' });
   const meseCapitalized = mese.charAt(0).toUpperCase() + mese.slice(1);
+
+  const hasBuoni = totaleBuoniIniziali > 0 || buoni.length > 0;
+
   summaryEl.innerHTML = `
     <div class="section-title">Riepilogo ${meseCapitalized}</div>
-    <div class="stat-grid">
+    <div class="stat-grid" style="grid-template-columns:${hasBuoni ? '1fr 1fr' : '1fr 1fr 1fr'}">
       <div class="stat-card" style="background:var(--gradient-card-purple)">
-        <div class="stat-icon" style="color:var(--accent)">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-        </div>
+        <div class="stat-icon" style="font-size:20px">🛒</div>
         <div class="stat-value">${daComprare.length}</div>
         <div class="stat-label">da comprare</div>
       </div>
@@ -225,10 +377,15 @@ async function loadDashboard() {
         <div class="stat-value" style="color:var(--danger)">€${totaleUscite.toFixed(0)}</div>
         <div class="stat-label">spese</div>
       </div>
-      <div class="stat-card" style="background:var(--gradient-card-cyan)">
-        <div class="stat-icon" style="color:var(--accent-secondary)">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      ${hasBuoni ? `
+        <div class="stat-card" style="background:var(--gradient-card-green)">
+          <div class="stat-icon" style="font-size:20px">🎫</div>
+          <div class="stat-value" style="color:var(--success)">${buoniRimanenti}</div>
+          <div class="stat-label">buoni pasto</div>
         </div>
+      ` : ''}
+      <div class="stat-card" style="background:var(--gradient-card-cyan)">
+        <div class="stat-icon" style="font-size:20px">🏠</div>
         <div class="stat-value">${dispensaItems.length}</div>
         <div class="stat-label">in dispensa</div>
       </div>
@@ -303,10 +460,10 @@ async function runSearch(query, container) {
     }))});
   }
 
-  document.getElementById('home-ai-status').style.display = 'none';
-  document.getElementById('home-alerts').style.display = 'none';
-  document.getElementById('home-summary').style.display = 'none';
-  document.getElementById('home-recent').style.display = 'none';
+  ['home-today','home-ai-status','home-alerts','home-suggestions','home-summary','home-recent'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   container.style.display = '';
 
   if (results.length === 0) {
@@ -357,7 +514,7 @@ async function checkSpendingAlerts() {
   const banners = [];
   if (sogliaW && weekTotal > sogliaW) {
     const pct = ((weekTotal / sogliaW) * 100).toFixed(0);
-    banners.push(`<div class="spending-alert" style="background:var(--danger-soft);border:1px solid var(--danger);border-radius:var(--radius-md);padding:14px var(--space-md);margin-bottom:var(--space-sm);display:flex;align-items:center;gap:12px">
+    banners.push(`<div style="background:var(--danger-soft);border:1px solid var(--danger);border-radius:var(--radius-md);padding:14px var(--space-md);margin-bottom:var(--space-sm);display:flex;align-items:center;gap:12px">
       <div style="font-size:20px">⚠️</div>
       <div>
         <div style="font-weight:700;color:var(--danger);font-size:var(--font-sm)">Soglia settimanale superata!</div>
@@ -367,7 +524,7 @@ async function checkSpendingAlerts() {
   }
   if (sogliaM && monthTotal > sogliaM) {
     const pct = ((monthTotal / sogliaM) * 100).toFixed(0);
-    banners.push(`<div class="spending-alert" style="background:var(--danger-soft);border:1px solid var(--danger);border-radius:var(--radius-md);padding:14px var(--space-md);margin-bottom:var(--space-sm);display:flex;align-items:center;gap:12px">
+    banners.push(`<div style="background:var(--danger-soft);border:1px solid var(--danger);border-radius:var(--radius-md);padding:14px var(--space-md);margin-bottom:var(--space-sm);display:flex;align-items:center;gap:12px">
       <div style="font-size:20px">⚠️</div>
       <div>
         <div style="font-weight:700;color:var(--danger);font-size:var(--font-sm)">Soglia mensile superata!</div>

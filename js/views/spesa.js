@@ -2,9 +2,39 @@ import * as db from '../db.js';
 import * as modal from '../components/modal.js';
 import { on, emit } from '../store.js';
 import { show as toast } from '../components/toast.js';
+import { getSuggestions } from '../suggestions.js';
 
 let unsub = null;
 let activeTab = 'lista';
+let shoppingMode = false;
+
+const PRODUCT_EMOJIS = {
+  banana: '🍌', banane: '🍌', mela: '🍎', mele: '🍎', arancia: '🍊', arance: '🍊',
+  limone: '🍋', limoni: '🍋', fragola: '🍓', fragole: '🍓', pera: '🍐', pere: '🍐',
+  uva: '🍇', anguria: '🍉', melone: '🍈', pesca: '🍑', pesche: '🍑',
+  pomodoro: '🍅', pomodori: '🍅', patata: '🥔', patate: '🥔', cipolla: '🧅', cipolle: '🧅',
+  aglio: '🧄', carota: '🥕', carote: '🥕', zucchina: '🥒', zucchine: '🥒',
+  melanzana: '🍆', melanzane: '🍆', peperone: '🫑', peperoni: '🫑',
+  insalata: '🥬', verdura: '🥦', frutta: '🍎', broccoli: '🥦',
+  mais: '🌽', fungo: '🍄', funghi: '🍄', avocado: '🥑',
+  latte: '🥛', formaggio: '🧀', mozzarella: '🧀', yogurt: '🥛', burro: '🧈',
+  uova: '🥚', uovo: '🥚', panna: '🥛', ricotta: '🧀', parmigiano: '🧀', grana: '🧀',
+  pollo: '🍗', carne: '🥩', pesce: '🐟', tonno: '🐟', salmone: '🐟',
+  gamberi: '🦐', salsiccia: '🌭', salsicce: '🌭', hamburger: '🍔',
+  bacon: '🥓', pancetta: '🥓', prosciutto: '🥩', salame: '🥩',
+  wurstel: '🌭', vitello: '🥩', maiale: '🥩', manzo: '🥩', bresaola: '🥩',
+  pane: '🍞', pasta: '🍝', riso: '🍚', farina: '🌾', biscotti: '🍪', biscotto: '🍪',
+  cereali: '🥣', pizza: '🍕', grissini: '🥖', cracker: '🍘', piadina: '🫓',
+  acqua: '💧', birra: '🍺', vino: '🍷', caffe: '☕', caffè: '☕',
+  te: '🍵', tè: '🍵', succo: '🧃', coca: '🥤', cola: '🥤',
+  bottiglia: '🍾', bottiglie: '🍾', lattina: '🥫', lattine: '🥫',
+  aranciata: '🍹', limonata: '🍋',
+  gelato: '🍦', cioccolato: '🍫', cioccolata: '🍫', nutella: '🍫',
+  marmellata: '🍯', miele: '🍯', merendine: '🧁', patatine: '🍟', caramelle: '🍬',
+  detersivo: '🧴', sapone: '🧼', shampoo: '🧴', carta: '🧻', scottex: '🧻',
+  fazzoletti: '🤧', pannolini: '👶', tovaglioli: '🧻', spugna: '🧽',
+  candeggina: '🧪', ammorbidente: '🧴', dentifricio: '🪥', bagnoschiuma: '🛁',
+};
 
 const PRODUCT_CATEGORIES = {
   'Frutta e Verdura': ['banana','banane','mela','mele','arancia','arance','limone','limoni','fragola','fragole','pera','pere','uva','anguria','melone','pesca','pesche','pomodoro','pomodori','patata','patate','cipolla','cipolle','aglio','carota','carote','zucchina','zucchine','melanzana','melanzane','peperone','peperoni','insalata','verdura','frutta'],
@@ -15,6 +45,15 @@ const PRODUCT_CATEGORIES = {
   'Dolci e Snack': ['gelato','cioccolato','cioccolata','nutella','marmellata','miele','merendine','patatine','caramelle'],
   'Casa e Igiene': ['detersivo','sapone','shampoo','carta','scottex','fazzoletti','pannolini','tovaglioli','spugna','candeggina','ammorbidente','dentifricio','bagnoschiuma'],
 };
+
+function getProductEmoji(name) {
+  const norm = name.toLowerCase().trim();
+  if (PRODUCT_EMOJIS[norm]) return PRODUCT_EMOJIS[norm];
+  for (const [key, emoji] of Object.entries(PRODUCT_EMOJIS)) {
+    if (norm.includes(key) || key.includes(norm)) return emoji;
+  }
+  return '📦';
+}
 
 function categorizeProduct(name) {
   const norm = name.toLowerCase().trim();
@@ -28,16 +67,22 @@ function categorizeProduct(name) {
 
 export async function render(container) {
   container.innerHTML = `
-    <div class="view-container">
+    <div class="view-container" id="spesa-normal-view">
       <div class="view-header" style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <h1>Spesa</h1>
           <p id="spesa-subtitle"></p>
         </div>
-        <button id="share-spesa" class="btn-circle" style="margin-top:8px;background:var(--bg-card);border:1px solid var(--border)" title="Condividi lista">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        </button>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="shopping-mode-btn" class="btn-circle" style="background:var(--bg-card);border:1px solid var(--border)" title="Modalità spesa">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          </button>
+          <button id="share-spesa" class="btn-circle" style="background:var(--bg-card);border:1px solid var(--border)" title="Condividi lista">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </button>
+        </div>
       </div>
+      <div id="spesa-suggestions"></div>
       <div id="spesa-tabs" style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md)">
         <button class="spesa-tab active" data-tab="lista" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none">Lista</button>
         <button class="spesa-tab" data-tab="catalogo" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Catalogo</button>
@@ -45,6 +90,7 @@ export async function render(container) {
       </div>
       <div id="spesa-content"></div>
     </div>
+    <div id="shopping-mode-view" style="display:none"></div>
     <button class="fab" id="spesa-add">+</button>
   `;
 
@@ -62,13 +108,16 @@ export async function render(container) {
   });
 
   document.getElementById('share-spesa').addEventListener('click', shareList);
+  document.getElementById('shopping-mode-btn').addEventListener('click', () => enterShoppingMode(container));
 
   unsub = on('data-changed', () => loadContent());
   await loadContent();
+  await loadSuggestions();
 }
 
 export function destroy() {
   if (unsub) unsub();
+  shoppingMode = false;
 }
 
 function updateTabs(container) {
@@ -85,7 +134,58 @@ function updateTabs(container) {
   });
 }
 
+async function loadSuggestions() {
+  const el = document.getElementById('spesa-suggestions');
+  if (!el) return;
+
+  const suggestions = await getSuggestions(4);
+  if (suggestions.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const urgencyColors = { terminato: 'var(--danger)', scorta_bassa: 'var(--warning)', pattern: 'var(--accent-secondary)', frequente: 'var(--accent)' };
+  const urgencyBg = { terminato: 'var(--danger-soft)', scorta_bassa: 'var(--warning-soft)', pattern: 'var(--accent-secondary-soft)', frequente: 'var(--accent-soft)' };
+
+  el.innerHTML = `
+    <div class="section-title" style="display:flex;align-items:center;gap:6px">
+      <span>💡</span> Suggeriti per te
+    </div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:var(--space-sm);margin-bottom:var(--space-sm);-webkit-overflow-scrolling:touch">
+      ${suggestions.map(s => `
+        <button class="suggestion-chip" data-nome="${s.nome}" style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 16px;background:${urgencyBg[s.tipo]};border:1px solid ${urgencyColors[s.tipo]}30;border-radius:var(--radius-full);cursor:pointer;transition:all 0.15s">
+          <span style="font-size:18px">${getProductEmoji(s.nome)}</span>
+          <div style="text-align:left">
+            <div style="font-size:var(--font-sm);font-weight:600;color:var(--text-primary);white-space:nowrap">${s.nome}</div>
+            <div style="font-size:10px;color:${urgencyColors[s.tipo]};white-space:nowrap">${s.motivo}</div>
+          </div>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  el.querySelectorAll('.suggestion-chip').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const nome = btn.dataset.nome;
+      const existing = (await db.getAll('spesa')).find(i => !i.completato && i.nome.toLowerCase() === nome.toLowerCase());
+      if (existing) { toast(`${nome} è già nella lista`); return; }
+      await db.add('spesa', {
+        nome, quantita: 1, unita: null,
+        completato: false, dataAggiunta: new Date().toISOString(), dataCompletato: null
+      });
+      toast(`${nome} aggiunto alla spesa`);
+      btn.style.opacity = '0.4';
+      btn.style.pointerEvents = 'none';
+      emit('data-changed', { source: 'spesa' });
+    });
+  });
+}
+
 async function loadContent() {
+  if (shoppingMode) {
+    await loadShoppingMode();
+    return;
+  }
   if (activeTab === 'lista') await loadLista();
   else if (activeTab === 'catalogo') await loadCatalogo();
   else await loadDispensa();
@@ -157,15 +257,26 @@ async function loadLista() {
 }
 
 function spesaItemHTML(item) {
-  const qtyText = item.quantita ? `${item.quantita}${item.unita ? ' ' + item.unita : ''}` : '';
+  const emoji = getProductEmoji(item.nome);
+  const qty = item.quantita || 1;
+  const qtyText = item.unita ? `${qty} ${item.unita}` : `x${qty}`;
+
   return `
-    <div class="list-item ${item.completato ? 'checked' : ''}" data-id="${item.id}" style="padding:16px var(--space-md)">
+    <div class="list-item ${item.completato ? 'checked' : ''}" data-id="${item.id}" style="padding:14px var(--space-md)">
       <div class="check" data-id="${item.id}"></div>
+      <div style="font-size:22px;flex-shrink:0;width:32px;text-align:center">${emoji}</div>
       <div class="item-text">
         <div class="item-title" style="font-size:var(--font-md)">${item.nome}</div>
-        ${qtyText ? `<div class="item-subtitle">${qtyText}</div>` : ''}
+        <div class="item-subtitle">${qtyText}</div>
       </div>
-      <button class="btn btn-ghost btn-icon delete-btn" data-id="${item.id}" style="font-size:14px;color:var(--text-muted);width:32px;height:32px">✕</button>
+      ${!item.completato ? `
+        <div class="qty-controls" style="display:flex;align-items:center;gap:2px;flex-shrink:0">
+          <button class="qty-btn qty-minus" data-id="${item.id}" style="width:30px;height:30px;border-radius:8px;background:var(--bg-hover);border:1px solid var(--border-light);color:var(--text-secondary);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s">−</button>
+          <span style="min-width:24px;text-align:center;font-size:var(--font-sm);font-weight:700;color:var(--text-primary)">${qty}</span>
+          <button class="qty-btn qty-plus" data-id="${item.id}" style="width:30px;height:30px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent)30;color:var(--accent);font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s">+</button>
+        </div>
+      ` : ''}
+      <button class="btn btn-ghost btn-icon delete-btn" data-id="${item.id}" style="font-size:14px;color:var(--text-muted);width:28px;height:28px;flex-shrink:0">✕</button>
     </div>
   `;
 }
@@ -183,10 +294,37 @@ function bindListaListeners(container) {
       await db.put('spesa', item);
 
       if (item.completato) {
+        if (navigator.vibrate) navigator.vibrate(50);
         await autoAddToDispensa(item.nome, item.quantita);
-        toast(`${item.nome} completato e aggiunto in dispensa`);
+        toast(`${item.nome} completato`);
       }
 
+      emit('data-changed', { source: 'spesa' });
+      loadContent();
+    });
+  });
+
+  container.querySelectorAll('.qty-minus').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const item = await db.get('spesa', Number(el.dataset.id));
+      if (!item) return;
+      const current = item.quantita || 1;
+      if (current <= 1) return;
+      item.quantita = current - 1;
+      await db.put('spesa', item);
+      emit('data-changed', { source: 'spesa' });
+      loadContent();
+    });
+  });
+
+  container.querySelectorAll('.qty-plus').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const item = await db.get('spesa', Number(el.dataset.id));
+      if (!item) return;
+      item.quantita = (item.quantita || 1) + 1;
+      await db.put('spesa', item);
       emit('data-changed', { source: 'spesa' });
       loadContent();
     });
@@ -215,6 +353,144 @@ function bindListaListeners(container) {
     });
   }
 }
+
+// ── Shopping Mode ──
+
+async function enterShoppingMode(mainContainer) {
+  shoppingMode = true;
+  const normalView = document.getElementById('spesa-normal-view');
+  const shoppingView = document.getElementById('shopping-mode-view');
+  const fab = document.getElementById('spesa-add');
+  const navbar = document.getElementById('navbar');
+
+  if (normalView) normalView.style.display = 'none';
+  if (fab) fab.style.display = 'none';
+  if (navbar) navbar.style.display = 'none';
+  if (shoppingView) shoppingView.style.display = '';
+
+  await loadShoppingMode();
+}
+
+function exitShoppingMode() {
+  shoppingMode = false;
+  const normalView = document.getElementById('spesa-normal-view');
+  const shoppingView = document.getElementById('shopping-mode-view');
+  const fab = document.getElementById('spesa-add');
+  const navbar = document.getElementById('navbar');
+
+  if (normalView) normalView.style.display = '';
+  if (shoppingView) shoppingView.style.display = 'none';
+  if (fab) fab.style.display = '';
+  if (navbar) navbar.style.display = '';
+
+  loadContent();
+  loadSuggestions();
+}
+
+async function loadShoppingMode() {
+  const el = document.getElementById('shopping-mode-view');
+  if (!el) return;
+
+  const items = await db.getAll('spesa');
+  const daComprare = items.filter(i => !i.completato);
+  const completati = items.filter(i => i.completato);
+  const total = daComprare.length + completati.length;
+  const progress = total > 0 ? (completati.length / total * 100) : 0;
+
+  el.innerHTML = `
+    <div style="min-height:100vh;background:var(--bg-primary);padding:var(--safe-top) 0 var(--space-xl)">
+      <div style="padding:var(--space-lg) var(--space-md) var(--space-sm);display:flex;justify-content:space-between;align-items:center">
+        <button id="exit-shopping" style="width:40px;height:40px;border-radius:var(--radius-full);background:var(--bg-card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--text-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div style="text-align:center">
+          <div style="font-size:var(--font-xl);font-weight:800;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Modalità Spesa</div>
+          <div style="font-size:var(--font-sm);color:var(--text-secondary)">${daComprare.length} rimast${daComprare.length === 1 ? 'o' : 'i'}</div>
+        </div>
+        <div style="width:40px"></div>
+      </div>
+
+      <div style="padding:0 var(--space-md) var(--space-md)">
+        <div style="height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${progress}%;background:var(--gradient-primary);border-radius:3px;transition:width 0.4s ease"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px">
+          <span style="font-size:var(--font-xs);color:var(--text-muted)">${completati.length}/${total}</span>
+          <span style="font-size:var(--font-xs);color:var(--accent);font-weight:700">${progress.toFixed(0)}%</span>
+        </div>
+      </div>
+
+      <div id="shopping-list" style="padding:0 var(--space-md)">
+        ${daComprare.length === 0 ? `
+          <div style="text-align:center;padding:var(--space-xl)">
+            <div style="font-size:64px;margin-bottom:var(--space-md)">🎉</div>
+            <div style="font-size:var(--font-xl);font-weight:700;margin-bottom:8px">Tutto preso!</div>
+            <div style="color:var(--text-secondary)">Hai completato la spesa</div>
+          </div>
+        ` : daComprare.map(item => {
+          const emoji = getProductEmoji(item.nome);
+          const qty = item.quantita || 1;
+          return `
+            <div class="shopping-item" data-id="${item.id}" style="display:flex;align-items:center;gap:var(--space-md);padding:20px var(--space-md);background:var(--bg-card);border-radius:var(--radius-md);margin-bottom:8px;border:1px solid var(--border);cursor:pointer;transition:all 0.2s;user-select:none;-webkit-user-select:none">
+              <div style="font-size:32px;flex-shrink:0">${emoji}</div>
+              <div style="flex:1">
+                <div style="font-size:var(--font-lg);font-weight:600">${item.nome}</div>
+                <div style="font-size:var(--font-sm);color:var(--text-secondary)">${item.unita ? qty + ' ' + item.unita : 'x' + qty}</div>
+              </div>
+              <div style="width:44px;height:44px;border-radius:var(--radius-full);border:2.5px solid var(--text-muted);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s"></div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      ${completati.length > 0 ? `
+        <div style="padding:var(--space-md)">
+          <div class="section-title" style="color:var(--success)">Presi (${completati.length})</div>
+          ${completati.slice(0, 10).map(item => `
+            <div style="display:flex;align-items:center;gap:var(--space-sm);padding:10px var(--space-md);opacity:0.5">
+              <span style="font-size:18px">${getProductEmoji(item.nome)}</span>
+              <span style="text-decoration:line-through;color:var(--text-muted);font-size:var(--font-sm)">${item.nome}</span>
+              <span style="margin-left:auto;color:var(--success);font-size:14px">✓</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  document.getElementById('exit-shopping').addEventListener('click', exitShoppingMode);
+
+  el.querySelectorAll('.shopping-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const id = Number(item.dataset.id);
+      const data = await db.get('spesa', id);
+      if (!data) return;
+
+      item.style.background = 'var(--success-soft)';
+      item.style.borderColor = 'var(--success)';
+      item.style.transform = 'scale(0.95)';
+      const circle = item.querySelector('div:last-child');
+      if (circle) {
+        circle.style.background = 'var(--success)';
+        circle.style.borderColor = 'var(--success)';
+        circle.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      }
+
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+
+      data.completato = true;
+      data.dataCompletato = new Date().toISOString();
+      await db.put('spesa', data);
+      await autoAddToDispensa(data.nome, data.quantita);
+
+      emit('data-changed', { source: 'spesa' });
+
+      setTimeout(() => loadShoppingMode(), 400);
+    });
+  });
+}
+
+// ── Dispensa ──
 
 async function autoAddToDispensa(nome, quantita) {
   const items = await db.getAll('dispensa');
@@ -287,9 +563,9 @@ async function loadDispensa() {
 }
 
 function dispensaItemHTML(item, status) {
+  const emoji = getProductEmoji(item.nome);
   const statusColors = { danger: 'var(--danger)', warning: 'var(--warning)', ok: 'var(--success)' };
   const statusBg = { danger: 'var(--danger-soft)', warning: 'var(--warning-soft)', ok: 'var(--success-soft)' };
-  const statusIcons = { danger: '✕', warning: '!', ok: '✓' };
   const qtyText = item.quantita !== null && item.quantita !== undefined
     ? `${item.quantita}${item.unita ? ' ' + item.unita : ''}`
     : '—';
@@ -299,7 +575,7 @@ function dispensaItemHTML(item, status) {
 
   return `
     <div class="list-item" data-id="${item.id}" style="padding:14px var(--space-md)">
-      <div style="width:36px;height:36px;border-radius:10px;background:${statusBg[status]};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:${statusColors[status]};flex-shrink:0">${statusIcons[status]}</div>
+      <div style="width:40px;height:40px;border-radius:12px;background:${statusBg[status]};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${emoji}</div>
       <div class="item-text">
         <div class="item-title">${item.nome}</div>
         <div class="item-subtitle">${qtyText}${lastBuy ? ' · comprato ' + lastBuy : ''}</div>
@@ -320,7 +596,7 @@ function bindDispensaListeners(container) {
       const item = await db.get('dispensa', Number(el.dataset.id));
       if (!item) return;
       await db.add('spesa', {
-        nome: item.nome, quantita: null, unita: null,
+        nome: item.nome, quantita: 1, unita: null,
         completato: false, dataAggiunta: new Date().toISOString(), dataCompletato: null
       });
       toast(`${item.nome} aggiunto alla spesa`);
@@ -337,7 +613,7 @@ function bindDispensaListeners(container) {
       item.quantita = 0;
       await db.put('dispensa', item);
       await db.add('spesa', {
-        nome: item.nome, quantita: null, unita: null,
+        nome: item.nome, quantita: 1, unita: null,
         completato: false, dataAggiunta: new Date().toISOString(), dataCompletato: null
       });
       emit('data-changed', { source: 'dispensa' });
@@ -398,6 +674,8 @@ async function editDispensaItem(id) {
   }, 100);
 }
 
+// ── Catalogo ──
+
 const CATALOG = {
   'Frutta e Verdura': ['Banane','Mele','Arance','Limoni','Fragole','Pere','Pomodori','Patate','Cipolle','Carote','Zucchine','Insalata','Peperoni','Melanzane','Aglio'],
   'Latticini e Uova': ['Latte','Yogurt','Mozzarella','Formaggio','Burro','Uova','Panna','Ricotta','Parmigiano'],
@@ -435,9 +713,10 @@ async function loadCatalogo() {
     const icon = catIcons[cat] || '📦';
     contentEl.innerHTML += `<div class="section-title" style="display:flex;align-items:center;gap:6px"><span>${icon}</span> ${cat}</div>`;
 
-    contentEl.innerHTML += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--space-sm)">
+    contentEl.innerHTML += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:var(--space-sm)">
       ${products.map(p => {
         const norm = p.toLowerCase();
+        const emoji = getProductEmoji(p);
         const alreadyInList = inLista.has(norm);
         const dispItem = [...inDispensa.entries()].find(([k]) => k === norm || norm.includes(k) || k.includes(norm));
         const inDisp = dispItem ? dispItem[1] : null;
@@ -457,7 +736,7 @@ async function loadCatalogo() {
           badge = ' ~';
         }
 
-        return `<button class="catalog-item" data-nome="${p}" style="padding:8px 14px;border-radius:var(--radius-full);font-size:var(--font-sm);font-weight:500;cursor:pointer;transition:all 0.15s;${style}">${p}${badge}</button>`;
+        return `<button class="catalog-item" data-nome="${p}" style="padding:8px 14px;border-radius:var(--radius-full);font-size:var(--font-sm);font-weight:500;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:6px;${style}"><span>${emoji}</span>${p}${badge}</button>`;
       }).join('')}
     </div>`;
   }
@@ -471,18 +750,19 @@ async function loadCatalogo() {
         return;
       }
       await db.add('spesa', {
-        nome, quantita: null, unita: null,
+        nome, quantita: 1, unita: null,
         completato: false, dataAggiunta: new Date().toISOString(), dataCompletato: null
       });
       toast(`${nome} aggiunto alla spesa`);
       btn.style.background = 'var(--accent-soft)';
       btn.style.color = 'var(--accent)';
       btn.style.borderColor = 'var(--accent)';
-      btn.textContent = nome + ' ✓';
       emit('data-changed', { source: 'spesa' });
     });
   });
 }
+
+// ── Share & Add ──
 
 async function shareList() {
   const items = await db.getAll('spesa');
@@ -492,8 +772,9 @@ async function shareList() {
     return;
   }
   const text = 'Lista della spesa:\n' + daComprare.map(i => {
-    const qty = i.quantita ? ` (${i.quantita}${i.unita ? ' ' + i.unita : ''})` : '';
-    return `- ${i.nome}${qty}`;
+    const emoji = getProductEmoji(i.nome);
+    const qty = i.quantita ? ` (x${i.quantita}${i.unita ? ' ' + i.unita : ''})` : '';
+    return `${emoji} ${i.nome}${qty}`;
   }).join('\n');
 
   if (navigator.share) {
@@ -515,8 +796,8 @@ function openAddSpesa() {
         <input type="text" name="nome" class="input-field" placeholder="Es. Latte" required autofocus>
       </div>
       <div class="form-group">
-        <label class="form-label">Quantita (opzionale)</label>
-        <input type="text" name="quantita" class="input-field" placeholder="Es. 2">
+        <label class="form-label">Quantità</label>
+        <input type="number" name="quantita" class="input-field" placeholder="1" value="1" min="1">
       </div>
       <button type="submit" class="btn btn-primary" style="width:100%;margin-top:var(--space-sm)">Aggiungi</button>
     </form>
@@ -525,7 +806,7 @@ function openAddSpesa() {
     for (const nome of items) {
       await db.add('spesa', {
         nome,
-        quantita: items.length === 1 && data.quantita ? parseFloat(data.quantita) : null,
+        quantita: items.length === 1 && data.quantita ? parseInt(data.quantita) : 1,
         unita: null,
         completato: false,
         dataAggiunta: new Date().toISOString(),
@@ -535,6 +816,7 @@ function openAddSpesa() {
     toast(items.length === 1 ? `${items[0]} aggiunto alla spesa` : `${items.length} prodotti aggiunti`);
     emit('data-changed', { source: 'spesa' });
     loadContent();
+    loadSuggestions();
   });
 }
 
@@ -546,11 +828,11 @@ function openAddDispensa() {
         <input type="text" name="nome" class="input-field" placeholder="Es. Riso" required autofocus>
       </div>
       <div class="form-group">
-        <label class="form-label">Quantita</label>
-        <input type="text" name="quantita" class="input-field" placeholder="Es. 2">
+        <label class="form-label">Quantità</label>
+        <input type="number" name="quantita" class="input-field" placeholder="1" value="1" min="1">
       </div>
       <div class="form-group">
-        <label class="form-label">Unita (es. kg, litri, pezzi)</label>
+        <label class="form-label">Unità (es. kg, litri, pezzi)</label>
         <input type="text" name="unita" class="input-field" placeholder="Es. kg">
       </div>
       <button type="submit" class="btn btn-primary" style="width:100%;margin-top:var(--space-sm)">Aggiungi</button>
@@ -558,7 +840,7 @@ function openAddDispensa() {
   `, async (data) => {
     await db.add('dispensa', {
       nome: data.nome,
-      quantita: data.quantita ? parseFloat(data.quantita) : null,
+      quantita: data.quantita ? parseFloat(data.quantita) : 1,
       unita: data.unita || null,
       ultimoAcquisto: new Date().toISOString(),
       consumoMedio: null,

@@ -7,7 +7,7 @@ REM
 REM Gira in primo piano di proposito: chiudere la finestra ferma il server,
 REM come per ogni altra modalita'. Il volume resta, quindi i dati no.
 setlocal
-cd /d "%~dp0backend"
+cd /d "%~dp0"
 
 REM Porta diversa da start.bat, cosi' sorgente e container possono stare
 REM accesi insieme. Dentro il container il server ascolta sempre sulla 3001
@@ -39,6 +39,7 @@ if errorlevel 1 (
 
 echo [container] build dell'immagine %IMMAGINE% ^(la prima volta ci mette qualche minuto^)
 podman build -t %IMMAGINE% -f Containerfile . || goto :errore
+echo [container] immagine pronta.
 
 echo.
 echo [container] avvio su http://127.0.0.1:%PORTA%

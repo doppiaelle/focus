@@ -1,0 +1,10 @@
+.git
+.claude
+backend/node_modules
+backend/data
+backend/.env
+*.bat
+*.ps1
+*.log
+.DS_Store
+Thumbs.db

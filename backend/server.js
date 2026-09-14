@@ -24,6 +24,11 @@ app.use('/api/impostazioni', require('./routes/impostazioni'));
 app.use('/api/widgets', require('./routes/widgets'));
 app.use('/api/ai', require('./routes/ai'));
 
+// Health check
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', version: '1.0.0' });
+});
+
 // Serve frontend in production
 const frontendPath = path.join(__dirname, '..', 'dist');
 if (fs.existsSync(frontendPath)) {
@@ -32,11 +37,6 @@ if (fs.existsSync(frontendPath)) {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 }
-
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: '1.0.0' });
-});
 
 async function start() {
   await initDb();

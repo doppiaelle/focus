@@ -4,6 +4,7 @@ import { on, emit } from '../store.js';
 
 let unsub = null;
 let activeTab = 'panoramica';
+let searchQuery = '';
 
 const CATEGORIE = ['Alimentazione', 'Casa', 'Trasporti', 'Svago', 'Salute', 'Abbonamenti', 'Altro'];
 const MESI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
@@ -15,15 +16,21 @@ export async function render(container) {
         <h1>Finanze</h1>
         <p id="finanze-periodo"></p>
       </div>
+      <div class="search-bar" style="margin-bottom:var(--space-sm)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="finanze-search" placeholder="Cerca transazioni..." autocomplete="off">
+      </div>
       <div id="finanze-tabs" style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md)">
         <button class="fin-tab active" data-tab="panoramica" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none">Panoramica</button>
-        <button class="fin-tab" data-tab="buoni" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Buoni Pasto</button>
+        <button class="fin-tab" data-tab="statistiche" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Statistiche</button>
+        <button class="fin-tab" data-tab="buoni" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Buoni</button>
       </div>
       <div id="finanze-content">
         <div id="finanze-summary"></div>
         <div id="finanze-chart"></div>
         <div id="finanze-list"></div>
       </div>
+      <div id="stats-content" style="display:none"></div>
       <div id="buoni-content" style="display:none"></div>
     </div>
     <button class="fab" id="finanze-add">+</button>
@@ -33,16 +40,18 @@ export async function render(container) {
     btn.addEventListener('click', () => {
       activeTab = btn.dataset.tab;
       updateFinTabs(container);
-      if (activeTab === 'panoramica') {
-        document.getElementById('finanze-content').style.display = '';
-        document.getElementById('buoni-content').style.display = 'none';
-        loadData();
-      } else {
-        document.getElementById('finanze-content').style.display = 'none';
-        document.getElementById('buoni-content').style.display = '';
-        loadBuoniPasto();
-      }
+      switchTab();
     });
+  });
+
+  const searchInput = document.getElementById('finanze-search');
+  let searchTimer = null;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery = searchInput.value.trim().toLowerCase();
+      if (activeTab === 'panoramica') loadData();
+    }, 200);
   });
 
   const fab = document.getElementById('finanze-add');
@@ -50,10 +59,7 @@ export async function render(container) {
     if (activeTab === 'buoni') openAddBuono();
     else openAddModal();
   });
-  unsub = on('data-changed', () => {
-    if (activeTab === 'panoramica') loadData();
-    else loadBuoniPasto();
-  });
+  unsub = on('data-changed', () => switchTab());
 
   let lastScroll = 0;
   window.addEventListener('scroll', () => {
@@ -62,11 +68,21 @@ export async function render(container) {
     lastScroll = st;
   }, { passive: true });
 
-  await loadData();
+  await switchTab();
 }
 
 export function destroy() {
   if (unsub) unsub();
+}
+
+function switchTab() {
+  document.getElementById('finanze-content').style.display = activeTab === 'panoramica' ? '' : 'none';
+  document.getElementById('stats-content').style.display = activeTab === 'statistiche' ? '' : 'none';
+  document.getElementById('buoni-content').style.display = activeTab === 'buoni' ? '' : 'none';
+
+  if (activeTab === 'panoramica') loadData();
+  else if (activeTab === 'statistiche') loadStatistiche();
+  else loadBuoniPasto();
 }
 
 function updateFinTabs(container) {
@@ -81,6 +97,166 @@ function updateFinTabs(container) {
       btn.style.border = '1px solid var(--border-light)';
     }
   });
+}
+
+// ── Statistiche ──
+
+async function loadStatistiche() {
+  const el = document.getElementById('stats-content');
+  if (!el) return;
+
+  const all = await db.getAll('transazioni');
+  const now = new Date();
+
+  if (all.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📊</div><p>Nessun dato disponibile.<br>Aggiungi transazioni per vedere le statistiche!</p></div>`;
+    return;
+  }
+
+  const uscite = all.filter(t => t.tipo === 'uscita');
+
+  // Per categoria (tutto il periodo)
+  const perCategoria = {};
+  for (const t of uscite) {
+    const cat = t.categoria || 'Altro';
+    perCategoria[cat] = (perCategoria[cat] || 0) + t.importo;
+  }
+  const totaleUscite = uscite.reduce((s, t) => s + t.importo, 0);
+  const catEntries = Object.entries(perCategoria).sort((a, b) => b[1] - a[1]);
+
+  const catColors = {
+    'Alimentazione': '#f87171', 'Casa': '#fbbf24', 'Trasporti': '#60a5fa',
+    'Svago': '#a78bfa', 'Salute': '#34d399', 'Abbonamenti': '#f472b6', 'Altro': '#94a3b8'
+  };
+
+  // Spesa media per giorno della settimana
+  const GIORNI = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const perGiorno = Array(7).fill(0);
+  const countGiorno = Array(7).fill(0);
+  for (const t of uscite) {
+    const d = new Date(t.data).getDay();
+    perGiorno[d] += t.importo;
+    countGiorno[d]++;
+  }
+  const mediaGiorno = perGiorno.map((v, i) => countGiorno[i] > 0 ? v / countGiorno[i] : 0);
+  const maxMediaGiorno = Math.max(1, ...mediaGiorno);
+
+  // Trend ultimi 12 mesi
+  const months12 = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months12.push({ month: d.getMonth(), year: d.getFullYear(), label: MESI[d.getMonth()] });
+  }
+  const trend12 = months12.map(m => {
+    const mTx = uscite.filter(t => {
+      const d = new Date(t.data);
+      return d.getMonth() === m.month && d.getFullYear() === m.year;
+    });
+    return { label: m.label, total: mTx.reduce((s, t) => s + t.importo, 0) };
+  });
+  const maxTrend = Math.max(1, ...trend12.map(d => d.total));
+
+  // Top spese singole
+  const topSpese = [...uscite].sort((a, b) => b.importo - a.importo).slice(0, 5);
+
+  // Media mensile
+  const mesiUnici = new Set(uscite.map(t => {
+    const d = new Date(t.data);
+    return `${d.getFullYear()}-${d.getMonth()}`;
+  }));
+  const mediaMensile = mesiUnici.size > 0 ? totaleUscite / mesiUnici.size : 0;
+
+  // Donut chart via conic-gradient
+  let conicStops = '';
+  let accumulated = 0;
+  const donutLegend = [];
+  for (const [cat, tot] of catEntries) {
+    const pct = totaleUscite > 0 ? (tot / totaleUscite * 100) : 0;
+    const color = catColors[cat] || '#94a3b8';
+    conicStops += `${color} ${accumulated}% ${accumulated + pct}%, `;
+    accumulated += pct;
+    donutLegend.push({ cat, tot, pct, color });
+  }
+  conicStops = conicStops.slice(0, -2);
+
+  el.innerHTML = `
+    <div class="card" style="text-align:center;padding:var(--space-xl)">
+      <div style="font-size:var(--font-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:var(--space-md)">Spese per categoria</div>
+      <div style="width:180px;height:180px;border-radius:50%;background:conic-gradient(${conicStops});margin:0 auto;position:relative">
+        <div style="position:absolute;inset:35px;border-radius:50%;background:var(--bg-card);display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-size:var(--font-xl);font-weight:800;color:var(--text-primary)">€${totaleUscite.toFixed(0)}</div>
+          <div style="font-size:var(--font-xs);color:var(--text-muted)">totale</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:var(--space-md)">
+        ${donutLegend.map(d => `
+          <div style="display:flex;align-items:center;gap:4px;font-size:var(--font-xs)">
+            <span style="width:8px;height:8px;border-radius:2px;background:${d.color};display:inline-block"></span>
+            <span style="color:var(--text-secondary)">${d.cat} ${d.pct.toFixed(0)}%</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-sm);margin-top:var(--space-sm)">
+      <div class="card" style="text-align:center">
+        <div style="font-size:var(--font-xs);color:var(--text-muted);margin-bottom:4px">Media mensile</div>
+        <div style="font-size:var(--font-xl);font-weight:700;color:var(--danger)">€${mediaMensile.toFixed(0)}</div>
+      </div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:var(--font-xs);color:var(--text-muted);margin-bottom:4px">Transazioni totali</div>
+        <div style="font-size:var(--font-xl);font-weight:700">${uscite.length}</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:var(--space-sm)">
+      <div style="font-size:var(--font-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:var(--space-md)">Trend 12 mesi</div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:100px">
+        ${trend12.map(d => {
+          const h = d.total > 0 ? Math.max(4, (d.total / maxTrend) * 90) : 0;
+          return `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+              <div style="width:100%;height:${h}px;background:var(--gradient-accent);border-radius:3px 3px 0 0;transition:height 0.4s" title="€${d.total.toFixed(2)}"></div>
+              <span style="font-size:8px;color:var(--text-muted)">${d.label}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:var(--space-sm)">
+      <div style="font-size:var(--font-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:var(--space-md)">Spesa media per giorno</div>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
+        ${[1,2,3,4,5,6,0].map(i => {
+          const h = mediaGiorno[i] > 0 ? Math.max(4, (mediaGiorno[i] / maxMediaGiorno) * 70) : 0;
+          const isWeekend = i === 0 || i === 6;
+          return `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+              <div style="font-size:9px;color:var(--text-muted);font-weight:600">€${mediaGiorno[i].toFixed(0)}</div>
+              <div style="width:100%;height:${h}px;background:${isWeekend ? 'var(--accent-secondary)' : 'var(--accent)'};border-radius:3px 3px 0 0;transition:height 0.4s"></div>
+              <span style="font-size:10px;color:var(--text-muted);font-weight:${isWeekend ? '700' : '400'}">${GIORNI[i]}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    ${topSpese.length > 0 ? `
+      <div class="card" style="margin-top:var(--space-sm)">
+        <div style="font-size:var(--font-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:var(--space-sm)">Top 5 spese</div>
+        ${topSpese.map((t, i) => `
+          <div style="display:flex;align-items:center;gap:var(--space-sm);padding:8px 0;${i < topSpese.length - 1 ? 'border-bottom:1px solid var(--border-light)' : ''}">
+            <div style="width:24px;height:24px;border-radius:var(--radius-full);background:var(--danger-soft);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--danger);flex-shrink:0">${i + 1}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--font-sm);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.descrizione || t.categoria}</div>
+              <div style="font-size:var(--font-xs);color:var(--text-muted)">${new Date(t.data).toLocaleDateString('it-IT')} · ${t.categoria}</div>
+            </div>
+            <div style="font-weight:700;color:var(--danger);font-size:var(--font-sm);flex-shrink:0">€${t.importo.toFixed(2)}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+  `;
 }
 
 // ── Buoni Pasto ──
@@ -380,20 +556,28 @@ async function loadData() {
 
   const listEl = document.getElementById('finanze-list');
   if (!listEl) return;
-  const recenti = all.sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, 20);
+
+  let recenti = all.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  if (searchQuery) {
+    recenti = recenti.filter(t =>
+      (t.descrizione || '').toLowerCase().includes(searchQuery) ||
+      (t.categoria || '').toLowerCase().includes(searchQuery) ||
+      t.importo.toFixed(2).includes(searchQuery)
+    );
+  }
+
+  recenti = recenti.slice(0, 30);
 
   if (recenti.length === 0) {
-    listEl.innerHTML = `
-      <div class="empty-state">
-        <div class="icon">💰</div>
-        <p>Nessuna transazione registrata.<br>Aggiungi una spesa o raccontala in chat!</p>
-      </div>
-    `;
+    listEl.innerHTML = searchQuery
+      ? `<div class="empty-state"><p>Nessun risultato per "${searchQuery}"</p></div>`
+      : `<div class="empty-state"><div class="icon">💰</div><p>Nessuna transazione registrata.<br>Aggiungi una spesa o raccontala in chat!</p></div>`;
     return;
   }
 
   listEl.innerHTML = `
-    <div class="section-title">Ultime transazioni</div>
+    <div class="section-title">${searchQuery ? `Risultati (${recenti.length})` : 'Ultime transazioni'}</div>
     ${recenti.map(t => `
       <div class="list-item" data-id="${t.id}">
         <div style="width:36px;height:36px;border-radius:var(--radius-sm);background:${t.tipo === 'uscita' ? 'var(--danger-soft)' : 'var(--success-soft)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">

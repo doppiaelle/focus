@@ -5,6 +5,7 @@ import { show as toast } from '../components/toast.js';
 
 let unsub = null;
 let activeTab = 'eventi';
+let agendaSearch = '';
 
 const RICORRENZE = [
   { value: '', label: 'Nessuna' },
@@ -20,6 +21,10 @@ export async function render(container) {
       <div class="view-header">
         <h1>Agenda</h1>
         <p>I tuoi impegni e scadenze</p>
+      </div>
+      <div class="search-bar" style="margin-bottom:var(--space-sm)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="agenda-search" placeholder="Cerca eventi e scadenze..." autocomplete="off">
       </div>
       <div id="agenda-tabs" style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md)">
         <button class="agenda-tab active" data-tab="eventi" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none">Eventi</button>
@@ -41,6 +46,16 @@ export async function render(container) {
   document.getElementById('agenda-add').addEventListener('click', () => {
     if (activeTab === 'eventi') openAddEvento();
     else openAddScadenza();
+  });
+
+  const searchInput = document.getElementById('agenda-search');
+  let searchTimer = null;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      agendaSearch = searchInput.value.trim().toLowerCase();
+      loadContent();
+    }, 200);
   });
 
   unsub = on('data-changed', () => loadContent());
@@ -131,12 +146,18 @@ async function loadEventi() {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
+  const matchSearch = (e) => !agendaSearch ||
+    e.titolo.toLowerCase().includes(agendaSearch) ||
+    (e.luogo || '').toLowerCase().includes(agendaSearch) ||
+    (e.tipo || '').toLowerCase().includes(agendaSearch) ||
+    (e.note || '').toLowerCase().includes(agendaSearch);
+
   const futuri = eventi
-    .filter(e => new Date(e.data) >= now)
+    .filter(e => new Date(e.data) >= now && matchSearch(e))
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
   const passati = eventiRaw
-    .filter(e => new Date(e.data) < now)
+    .filter(e => new Date(e.data) < now && matchSearch(e))
     .sort((a, b) => new Date(b.data) - new Date(a.data));
 
   if (eventiRaw.length === 0) {
@@ -173,12 +194,17 @@ async function loadScadenze() {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
+  const matchScadSearch = (s) => !agendaSearch ||
+    s.titolo.toLowerCase().includes(agendaSearch) ||
+    (s.descrizione || '').toLowerCase().includes(agendaSearch) ||
+    (s.categoria || '').toLowerCase().includes(agendaSearch);
+
   const attive = scadenze
-    .filter(s => !s.completata)
+    .filter(s => !s.completata && matchScadSearch(s))
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
   const completate = scadenzeRaw
-    .filter(s => s.completata)
+    .filter(s => s.completata && matchScadSearch(s))
     .sort((a, b) => new Date(b.data) - new Date(a.data));
 
   if (scadenzeRaw.length === 0) {

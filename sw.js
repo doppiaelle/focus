@@ -1,4 +1,4 @@
-const CACHE_NAME = 'focus-v18';
+const CACHE_NAME = 'focus-v21';
 const ASSETS = [
   './',
   './index.html',
@@ -14,15 +14,14 @@ const ASSETS = [
   './js/store.js',
   './js/parser.js',
   './js/ai.js',
+  './js/suggestions.js',
   './js/components/navbar.js',
   './js/components/modal.js',
   './js/components/toast.js',
   './js/views/home.js',
   './js/views/chat.js',
   './js/views/agenda.js',
-  './js/views/altro.js',
   './js/views/spesa.js',
-  './js/views/dispensa.js',
   './js/views/finanze.js',
   './js/views/settings.js',
   './js/notifications.js',
@@ -66,7 +65,16 @@ self.addEventListener('fetch', (event) => {
     );
   } else {
     event.respondWith(
-      caches.match(event.request).then(cached => cached || fetch(event.request))
+      caches.match(event.request).then(cached => {
+        const fetchPromise = fetch(event.request).then(response => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || fetchPromise;
+      })
     );
   }
 });

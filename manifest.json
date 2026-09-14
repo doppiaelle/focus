@@ -1,5 +1,5 @@
 {
-  "name": "Focus",
+  "name": "Focus by DoubleL",
   "short_name": "Focus",
   "description": "Il tuo hub personale intelligente",
   "start_url": "./index.html",
@@ -9,6 +9,7 @@
   "background_color": "#0b0e1a",
   "theme_color": "#0b0e1a",
   "orientation": "portrait",
+  "categories": ["lifestyle", "productivity", "finance"],
   "icons": [
     {
       "src": "icons/icon-192.svg",
@@ -21,6 +22,44 @@
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Lista Spesa",
+      "short_name": "Spesa",
+      "url": "./index.html#/spesa",
+      "icons": [{ "src": "icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "./index.html#/agenda",
+      "icons": [{ "src": "icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "url": "./index.html#/chat",
+      "icons": [{ "src": "icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Finanze",
+      "short_name": "Finanze",
+      "url": "./index.html#/finanze",
+      "icons": [{ "src": "icons/icon-192.svg", "sizes": "192x192" }]
     }
   ]
 }

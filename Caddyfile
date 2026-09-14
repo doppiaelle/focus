@@ -1,0 +1,13 @@
+{$FOCUS_DOMAIN:localhost} {
+	reverse_proxy localhost:3001
+
+	header {
+		-Server
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	log {
+		output stderr
+		level ERROR
+	}
+}

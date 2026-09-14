@@ -23,6 +23,7 @@ export async function render(container) {
       <div id="finanze-tabs" style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md)">
         <button class="fin-tab active" data-tab="panoramica" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none">Panoramica</button>
         <button class="fin-tab" data-tab="statistiche" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Statistiche</button>
+        <button class="fin-tab" data-tab="ricorrenti" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Ricorrenti</button>
         <button class="fin-tab" data-tab="buoni" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Buoni</button>
       </div>
       <div id="finanze-content">
@@ -31,6 +32,7 @@ export async function render(container) {
         <div id="finanze-list"></div>
       </div>
       <div id="stats-content" style="display:none"></div>
+      <div id="ricorrenti-content" style="display:none"></div>
       <div id="buoni-content" style="display:none"></div>
     </div>
     <button class="fab" id="finanze-add">+</button>
@@ -57,6 +59,7 @@ export async function render(container) {
   const fab = document.getElementById('finanze-add');
   fab.addEventListener('click', () => {
     if (activeTab === 'buoni') openAddBuono();
+    else if (activeTab === 'ricorrenti') openAddRicorrente();
     else openAddModal();
   });
   unsub = on('data-changed', () => switchTab());
@@ -78,10 +81,12 @@ export function destroy() {
 function switchTab() {
   document.getElementById('finanze-content').style.display = activeTab === 'panoramica' ? '' : 'none';
   document.getElementById('stats-content').style.display = activeTab === 'statistiche' ? '' : 'none';
+  document.getElementById('ricorrenti-content').style.display = activeTab === 'ricorrenti' ? '' : 'none';
   document.getElementById('buoni-content').style.display = activeTab === 'buoni' ? '' : 'none';
 
   if (activeTab === 'panoramica') loadData();
   else if (activeTab === 'statistiche') loadStatistiche();
+  else if (activeTab === 'ricorrenti') loadRicorrenti();
   else loadBuoniPasto();
 }
 
@@ -502,10 +507,15 @@ async function loadData() {
     'Svago': '#a78bfa', 'Salute': '#34d399', 'Abbonamenti': '#f472b6', 'Altro': '#94a3b8'
   };
 
+  await processRicorrenti();
+
   const summaryEl = document.getElementById('finanze-summary');
   if (!summaryEl) return;
 
   summaryEl.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-sm)">
+      <button id="export-report" class="btn btn-ghost" style="font-size:var(--font-xs);padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-full)">📄 Report mensile</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-sm);margin-bottom:var(--space-sm)">
       <div class="card">
         <div class="item-subtitle">Uscite</div>
@@ -551,6 +561,11 @@ async function loadData() {
       </div>
     ` : ''}
   `;
+
+  const exportBtn = document.getElementById('export-report');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => exportMonthlyReport(meseCorrente, mese, totaleUscite, totaleEntrate, perCategoria, catColors));
+  }
 
   renderChart(all, now);
 
@@ -702,4 +717,327 @@ function openAddModal() {
     emit('data-changed', { source: 'transazione' });
     loadData();
   });
+}
+
+// ── Transazioni Ricorrenti ──
+
+const FREQ_LABELS = { mensile: 'Mensile', settimanale: 'Settimanale', annuale: 'Annuale', bimestrale: 'Ogni 2 mesi', trimestrale: 'Trimestrale' };
+
+async function processRicorrenti() {
+  const ricorrenti = await db.getAll('ricorrenti');
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const r of ricorrenti) {
+    if (!r.attiva || !r.prossima) continue;
+    while (r.prossima <= today) {
+      await db.add('transazioni', {
+        importo: r.importo,
+        tipo: r.tipo,
+        categoria: r.categoria,
+        descrizione: `${r.descrizione} (auto)`,
+        data: new Date(r.prossima).toISOString()
+      });
+      r.prossima = calcNextDate(r.prossima, r.frequenza);
+      r.ultimaGenerazione = today;
+    }
+    await db.put('ricorrenti', r);
+  }
+}
+
+function calcNextDate(dateStr, freq) {
+  const d = new Date(dateStr);
+  switch (freq) {
+    case 'settimanale': d.setDate(d.getDate() + 7); break;
+    case 'mensile': d.setMonth(d.getMonth() + 1); break;
+    case 'bimestrale': d.setMonth(d.getMonth() + 2); break;
+    case 'trimestrale': d.setMonth(d.getMonth() + 3); break;
+    case 'annuale': d.setFullYear(d.getFullYear() + 1); break;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+async function loadRicorrenti() {
+  const el = document.getElementById('ricorrenti-content');
+  if (!el) return;
+
+  const ricorrenti = await db.getAll('ricorrenti');
+
+  if (ricorrenti.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔄</div>
+        <p>Nessuna spesa ricorrente.<br>Aggiungi affitto, abbonamenti, bollette...</p>
+      </div>
+    `;
+    return;
+  }
+
+  const attive = ricorrenti.filter(r => r.attiva);
+  const inattive = ricorrenti.filter(r => !r.attiva);
+  const totMensile = attive.reduce((s, r) => {
+    let monthly = r.importo;
+    if (r.frequenza === 'settimanale') monthly = r.importo * 4.33;
+    else if (r.frequenza === 'bimestrale') monthly = r.importo / 2;
+    else if (r.frequenza === 'trimestrale') monthly = r.importo / 3;
+    else if (r.frequenza === 'annuale') monthly = r.importo / 12;
+    return s + monthly;
+  }, 0);
+
+  el.innerHTML = `
+    <div class="card" style="text-align:center;margin-bottom:var(--space-md)">
+      <div style="font-size:var(--font-xs);color:var(--text-muted);margin-bottom:4px">Costo fisso mensile stimato</div>
+      <div style="font-size:var(--font-hero);font-weight:800;color:var(--danger)">€${totMensile.toFixed(0)}</div>
+      <div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px">${attive.length} voc${attive.length === 1 ? 'e' : 'i'} attiv${attive.length === 1 ? 'a' : 'e'}</div>
+    </div>
+
+    ${attive.length > 0 ? `
+      <div class="section-title">Attive</div>
+      ${attive.map(r => ricorrenteHTML(r)).join('')}
+    ` : ''}
+
+    ${inattive.length > 0 ? `
+      <div class="section-title">In pausa</div>
+      ${inattive.map(r => ricorrenteHTML(r)).join('')}
+    ` : ''}
+  `;
+
+  el.querySelectorAll('.ricorrente-item').forEach(item => {
+    item.addEventListener('click', () => editRicorrente(Number(item.dataset.id)));
+  });
+
+  el.querySelectorAll('.toggle-ricorrente').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const r = await db.get('ricorrenti', Number(btn.dataset.id));
+      if (!r) return;
+      r.attiva = !r.attiva;
+      await db.put('ricorrenti', r);
+      emit('data-changed', { source: 'ricorrenti' });
+      loadRicorrenti();
+    });
+  });
+}
+
+function ricorrenteHTML(r) {
+  const catEmojis = {
+    'Alimentazione': '🛒', 'Casa': '🏠', 'Trasporti': '🚗', 'Svago': '🎮',
+    'Salute': '🏥', 'Abbonamenti': '📱', 'Altro': '📋'
+  };
+  const emoji = catEmojis[r.categoria] || '📋';
+
+  return `
+    <div class="list-item ricorrente-item" data-id="${r.id}" style="cursor:pointer;${!r.attiva ? 'opacity:0.5' : ''}">
+      <div style="width:40px;height:40px;border-radius:12px;background:${r.tipo === 'uscita' ? 'var(--danger-soft)' : 'var(--success-soft)'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${emoji}</div>
+      <div class="item-text">
+        <div class="item-title">${r.descrizione}</div>
+        <div class="item-subtitle">${FREQ_LABELS[r.frequenza] || r.frequenza} · ${r.categoria}${r.prossima ? ' · Prossima: ' + new Date(r.prossima).toLocaleDateString('it-IT') : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div style="font-weight:700;color:${r.tipo === 'uscita' ? 'var(--danger)' : 'var(--success)'};font-size:var(--font-sm)">
+          ${r.tipo === 'uscita' ? '-' : '+'}€${r.importo.toFixed(2)}
+        </div>
+        <button class="toggle-ricorrente" data-id="${r.id}" style="font-size:10px;padding:2px 8px;border-radius:var(--radius-full);border:1px solid var(--border);background:${r.attiva ? 'var(--success-soft)' : 'var(--bg-input)'};color:${r.attiva ? 'var(--success)' : 'var(--text-muted)'};cursor:pointer">
+          ${r.attiva ? 'Attiva' : 'Pausa'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function openAddRicorrente() {
+  modal.open('Nuova spesa ricorrente', `
+    <form>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input type="text" name="descrizione" class="input-field" placeholder="Es. Affitto, Netflix..." required autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Importo (€)</label>
+        <input type="number" step="0.01" name="importo" class="input-field" placeholder="0.00" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select name="tipo" class="input-field">
+          <option value="uscita">Uscita</option>
+          <option value="entrata">Entrata</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Frequenza</label>
+        <select name="frequenza" class="input-field">
+          <option value="mensile">Mensile</option>
+          <option value="settimanale">Settimanale</option>
+          <option value="bimestrale">Ogni 2 mesi</option>
+          <option value="trimestrale">Trimestrale</option>
+          <option value="annuale">Annuale</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select name="categoria" class="input-field">
+          ${CATEGORIE.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prossima data</label>
+        <input type="date" name="prossima" class="input-field" value="${new Date().toISOString().slice(0, 10)}" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:var(--space-sm)">Salva</button>
+    </form>
+  `, async (data) => {
+    await db.add('ricorrenti', {
+      descrizione: data.descrizione,
+      importo: parseFloat(data.importo),
+      tipo: data.tipo,
+      frequenza: data.frequenza,
+      categoria: data.categoria,
+      prossima: data.prossima,
+      attiva: true,
+      ultimaGenerazione: null
+    });
+    emit('data-changed', { source: 'ricorrenti' });
+    loadRicorrenti();
+  });
+}
+
+async function editRicorrente(id) {
+  const r = await db.get('ricorrenti', id);
+  if (!r) return;
+
+  modal.open('Modifica ricorrente', `
+    <form>
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input type="text" name="descrizione" class="input-field" value="${r.descrizione}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Importo (€)</label>
+        <input type="number" step="0.01" name="importo" class="input-field" value="${r.importo}" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Frequenza</label>
+        <select name="frequenza" class="input-field">
+          ${Object.entries(FREQ_LABELS).map(([v, l]) => `<option value="${v}"${r.frequenza === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select name="categoria" class="input-field">
+          ${CATEGORIE.map(c => `<option value="${c}"${r.categoria === c ? ' selected' : ''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prossima data</label>
+        <input type="date" name="prossima" class="input-field" value="${r.prossima || ''}" required>
+      </div>
+      <div style="display:flex;gap:var(--space-sm);margin-top:var(--space-md)">
+        <button type="submit" class="btn btn-primary" style="flex:1">Salva</button>
+        <button type="button" id="del-ricorrente" class="btn btn-ghost" style="color:var(--danger)">Elimina</button>
+      </div>
+    </form>
+  `, async (data) => {
+    r.descrizione = data.descrizione;
+    r.importo = parseFloat(data.importo);
+    r.frequenza = data.frequenza;
+    r.categoria = data.categoria;
+    r.prossima = data.prossima;
+    await db.put('ricorrenti', r);
+    emit('data-changed', { source: 'ricorrenti' });
+    loadRicorrenti();
+  });
+
+  setTimeout(() => {
+    const delBtn = document.getElementById('del-ricorrente');
+    if (delBtn) {
+      delBtn.addEventListener('click', async () => {
+        await db.del('ricorrenti', id);
+        modal.close();
+        emit('data-changed', { source: 'ricorrenti' });
+        loadRicorrenti();
+      });
+    }
+  }, 100);
+}
+
+// ── Export Report ──
+
+function exportMonthlyReport(transazioni, meseLabel, totUscite, totEntrate, perCat, catColors) {
+  const uscite = transazioni.filter(t => t.tipo === 'uscita').sort((a, b) => new Date(a.data) - new Date(b.data));
+  const entrate = transazioni.filter(t => t.tipo === 'entrata').sort((a, b) => new Date(a.data) - new Date(b.data));
+
+  const catRows = Object.entries(perCat).sort((a, b) => b[1] - a[1]).map(([cat, tot]) => {
+    const pct = totUscite > 0 ? (tot / totUscite * 100).toFixed(1) : '0';
+    return `<tr><td style="padding:6px 12px">${cat}</td><td style="padding:6px 12px;text-align:right;font-weight:600">€${tot.toFixed(2)}</td><td style="padding:6px 12px;text-align:right;color:#888">${pct}%</td></tr>`;
+  }).join('');
+
+  const txRows = uscite.map(t => `
+    <tr><td style="padding:4px 12px;font-size:13px">${new Date(t.data).toLocaleDateString('it-IT')}</td>
+    <td style="padding:4px 12px;font-size:13px">${t.descrizione || t.categoria}</td>
+    <td style="padding:4px 12px;font-size:13px">${t.categoria}</td>
+    <td style="padding:4px 12px;font-size:13px;text-align:right;font-weight:600;color:#dc3545">-€${t.importo.toFixed(2)}</td></tr>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Report ${meseLabel} — Focus</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; max-width:700px; margin:40px auto; padding:20px; color:#333; }
+    h1 { font-size:28px; margin-bottom:4px; }
+    .subtitle { color:#888; font-size:14px; margin-bottom:32px; }
+    .summary { display:flex; gap:16px; margin-bottom:32px; }
+    .summary-card { flex:1; padding:20px; border-radius:12px; text-align:center; }
+    .summary-card.uscite { background:#fff0f0; }
+    .summary-card.entrate { background:#f0fff4; }
+    .summary-card .value { font-size:24px; font-weight:800; }
+    .summary-card .label { font-size:12px; color:#888; margin-top:4px; }
+    h2 { font-size:18px; margin:24px 0 12px; border-bottom:2px solid #eee; padding-bottom:8px; }
+    table { width:100%; border-collapse:collapse; }
+    table thead th { text-align:left; padding:8px 12px; background:#f8f9fa; font-size:12px; text-transform:uppercase; color:#888; letter-spacing:0.5px; }
+    table tbody tr:nth-child(even) { background:#f8f9fa; }
+    .footer { margin-top:40px; text-align:center; font-size:12px; color:#aaa; border-top:1px solid #eee; padding-top:16px; }
+    @media print { body { margin:0; } }
+  </style>
+</head>
+<body>
+  <h1>Report Finanziario</h1>
+  <div class="subtitle">${meseLabel.charAt(0).toUpperCase() + meseLabel.slice(1)} — generato il ${new Date().toLocaleDateString('it-IT')}</div>
+
+  <div class="summary">
+    <div class="summary-card uscite">
+      <div class="value" style="color:#dc3545">-€${totUscite.toFixed(2)}</div>
+      <div class="label">Uscite</div>
+    </div>
+    <div class="summary-card entrate">
+      <div class="value" style="color:#28a745">+€${totEntrate.toFixed(2)}</div>
+      <div class="label">Entrate</div>
+    </div>
+  </div>
+
+  <h2>Per Categoria</h2>
+  <table>
+    <thead><tr><th>Categoria</th><th style="text-align:right">Totale</th><th style="text-align:right">%</th></tr></thead>
+    <tbody>${catRows}</tbody>
+  </table>
+
+  ${txRows ? `
+    <h2>Dettaglio Uscite (${uscite.length})</h2>
+    <table>
+      <thead><tr><th>Data</th><th>Descrizione</th><th>Categoria</th><th style="text-align:right">Importo</th></tr></thead>
+      <tbody>${txRows}</tbody>
+    </table>
+  ` : ''}
+
+  <div class="footer">Focus by DoubleL — Il tuo hub personale intelligente</div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
 }

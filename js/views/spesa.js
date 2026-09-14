@@ -224,6 +224,9 @@ async function loadLista() {
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(item);
     }
+    for (const cat of Object.keys(grouped)) {
+      grouped[cat].sort((a, b) => (a.ordine ?? 9999) - (b.ordine ?? 9999));
+    }
 
     const catOrder = [...Object.keys(PRODUCT_CATEGORIES), 'Altro'];
     const catIcons = {
@@ -254,6 +257,7 @@ async function loadLista() {
   }
 
   bindListaListeners(contentEl);
+  initDragAndDrop(contentEl);
 }
 
 function spesaItemHTML(item) {
@@ -263,6 +267,7 @@ function spesaItemHTML(item) {
 
   return `
     <div class="list-item ${item.completato ? 'checked' : ''}" data-id="${item.id}" style="padding:14px var(--space-md)">
+      ${!item.completato ? `<div class="drag-handle" data-id="${item.id}" style="cursor:grab;touch-action:none;padding:4px;color:var(--text-muted);font-size:16px;flex-shrink:0;user-select:none">☰</div>` : ''}
       <div class="check" data-id="${item.id}"></div>
       <div style="font-size:22px;flex-shrink:0;width:32px;text-align:center">${emoji}</div>
       <div class="item-text">
@@ -351,6 +356,111 @@ function bindListaListeners(container) {
       }
       loadContent();
     });
+  }
+}
+
+// ── Drag & Drop ──
+
+function initDragAndDrop(container) {
+  let dragItem = null;
+  let dragClone = null;
+  let startY = 0;
+  let offsetY = 0;
+
+  container.querySelectorAll('.drag-handle').forEach(handle => {
+    handle.addEventListener('touchstart', onTouchStart, { passive: false });
+    handle.addEventListener('mousedown', onMouseDown);
+  });
+
+  function onTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    startDrag(handle2item(e.currentTarget), touch.clientY);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+  }
+
+  function onMouseDown(e) {
+    e.preventDefault();
+    startDrag(handle2item(e.currentTarget), e.clientY);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  function handle2item(handle) {
+    return handle.closest('.list-item');
+  }
+
+  function startDrag(item, clientY) {
+    dragItem = item;
+    const rect = item.getBoundingClientRect();
+    offsetY = clientY - rect.top;
+
+    dragClone = item.cloneNode(true);
+    dragClone.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:9999;opacity:0.9;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.3);border-radius:var(--radius-md);background:var(--bg-card);transition:none;`;
+    document.body.appendChild(dragClone);
+
+    item.style.opacity = '0.3';
+    startY = clientY;
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+
+  function onTouchMove(e) {
+    e.preventDefault();
+    moveDrag(e.touches[0].clientY);
+  }
+  function onMouseMove(e) { moveDrag(e.clientY); }
+
+  function moveDrag(clientY) {
+    if (!dragClone) return;
+    dragClone.style.top = (clientY - offsetY) + 'px';
+
+    const siblings = [...container.querySelectorAll('.list-item:not(.checked)')];
+    const dragIdx = siblings.indexOf(dragItem);
+
+    for (let i = 0; i < siblings.length; i++) {
+      if (i === dragIdx || siblings[i].classList.contains('checked')) continue;
+      const rect = siblings[i].getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid && i < dragIdx) {
+        siblings[i].before(dragItem);
+        break;
+      } else if (clientY > mid && i > dragIdx) {
+        siblings[i].after(dragItem);
+        break;
+      }
+    }
+  }
+
+  function onTouchEnd() {
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+    endDrag();
+  }
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    endDrag();
+  }
+
+  async function endDrag() {
+    if (dragClone) {
+      dragClone.remove();
+      dragClone = null;
+    }
+    if (dragItem) {
+      dragItem.style.opacity = '';
+      const allItems = [...container.querySelectorAll('.list-item:not(.checked)')];
+      for (let i = 0; i < allItems.length; i++) {
+        const id = Number(allItems[i].dataset.id);
+        const item = await db.get('spesa', id);
+        if (item) {
+          item.ordine = i;
+          await db.put('spesa', item);
+        }
+      }
+      dragItem = null;
+    }
   }
 }
 

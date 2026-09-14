@@ -1,5 +1,5 @@
 const DB_NAME = 'nodo';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES = {
   messages: { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'timestamp', keyPath: 'timestamp' }] },
@@ -10,6 +10,8 @@ const STORES = {
   eventi: { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'data', keyPath: 'data' }, { name: 'tipo', keyPath: 'tipo' }] },
   scadenze: { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'data', keyPath: 'data' }, { name: 'completata', keyPath: 'completata' }] },
   buoni_pasto: { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'data', keyPath: 'data' }, { name: 'tipo', keyPath: 'tipo' }] },
+  ricorrenti: { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'prossima', keyPath: 'prossima' }] },
+  widget_config: { keyPath: 'key' },
 };
 
 let dbInstance = null;

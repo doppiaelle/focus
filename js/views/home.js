@@ -2,6 +2,15 @@ import * as db from '../db.js';
 import * as ai from '../ai.js';
 import { show as toast } from '../components/toast.js';
 import { getSuggestions } from '../suggestions.js';
+import * as modal from '../components/modal.js';
+
+const WIDGET_DEFAULTS = {
+  today: { label: 'Oggi', emoji: '📅', enabled: true },
+  alerts: { label: 'Avvisi', emoji: '🔔', enabled: true },
+  suggestions: { label: 'Suggerimenti', emoji: '💡', enabled: true },
+  summary: { label: 'Riepilogo', emoji: '📊', enabled: true },
+  recent: { label: 'Attività recenti', emoji: '🕐', enabled: true },
+};
 
 export async function render(container) {
   container.innerHTML = `
@@ -11,9 +20,14 @@ export async function render(container) {
           <h1 style="font-size:var(--font-hero)">Focus</h1>
           <p id="home-greeting" style="font-size:var(--font-md);margin-top:6px;-webkit-text-fill-color:var(--text-secondary)">Il tuo hub personale</p>
         </div>
-        <a href="#/settings" class="btn-circle" style="margin-top:8px;background:var(--bg-card);border:1px solid var(--border)">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </a>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="home-customize" class="btn-circle" style="background:var(--bg-card);border:1px solid var(--border)" title="Personalizza widget">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+          <a href="#/settings" class="btn-circle" style="background:var(--bg-card);border:1px solid var(--border)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </a>
+        </div>
       </div>
       <div class="search-bar" id="search-bar">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -49,13 +63,18 @@ export async function render(container) {
     searchTimer = setTimeout(() => runSearch(q, searchResults), 200);
   });
 
+  document.getElementById('home-customize').addEventListener('click', openWidgetConfig);
+
   const isEmpty = await isFirstLaunch();
   if (isEmpty) {
     showWelcomeCard();
   } else {
-    await loadTodayWidget();
-    await loadDashboard();
-    await loadSmartSuggestions();
+    const cfg = await getWidgetConfig();
+    if (cfg.today) await loadTodayWidget();
+    else document.getElementById('home-today').innerHTML = '';
+    if (cfg.alerts || cfg.summary || cfg.recent) await loadDashboard(cfg);
+    if (cfg.suggestions) await loadSmartSuggestions();
+    else document.getElementById('home-suggestions').innerHTML = '';
     await checkSpendingAlerts();
   }
 }
@@ -249,10 +268,11 @@ async function loadSmartSuggestions() {
 
 // ── Dashboard ──
 
-async function loadDashboard() {
+async function loadDashboard(cfg) {
   const alertsEl = document.getElementById('home-alerts');
   const summaryEl = document.getElementById('home-summary');
   const recentEl = document.getElementById('home-recent');
+  if (!cfg) cfg = { alerts: true, summary: true, recent: true };
 
   const spesaItems = await db.getAll('spesa');
   const dispensaItems = await db.getAll('dispensa');
@@ -335,26 +355,30 @@ async function loadDashboard() {
   const alertColors = { danger: 'var(--danger)', warning: 'var(--warning)', accent: 'var(--accent)' };
   const alertBg = { danger: 'var(--danger-soft)', warning: 'var(--warning-soft)', accent: 'var(--accent-soft)' };
 
-  if (alerts.length > 0) {
-    alertsEl.innerHTML = `
-      <div class="section-title">Avvisi</div>
-      ${alerts.map(a => `
-        <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px var(--space-md)">
-          <div style="width:36px;height:36px;border-radius:10px;background:${alertBg[a.type]};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${alertColors[a.type]};flex-shrink:0">${a.icon}</div>
-          <span style="font-size:var(--font-sm);font-weight:500">${a.text}</span>
+  if (cfg.alerts) {
+    if (alerts.length > 0) {
+      alertsEl.innerHTML = `
+        <div class="section-title">Avvisi</div>
+        ${alerts.map(a => `
+          <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px var(--space-md)">
+            <div style="width:36px;height:36px;border-radius:10px;background:${alertBg[a.type]};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${alertColors[a.type]};flex-shrink:0">${a.icon}</div>
+            <span style="font-size:var(--font-sm);font-weight:500">${a.text}</span>
+          </div>
+        `).join('')}
+      `;
+    } else {
+      alertsEl.innerHTML = `
+        <div style="background:var(--gradient-card-indigo);border-radius:var(--radius-md);padding:var(--space-xl);text-align:center;margin-bottom:var(--space-md);border:1px solid var(--border)">
+          <div style="width:48px;height:48px;border-radius:var(--radius-full);background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-md)">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-title" style="font-size:var(--font-lg);margin-bottom:4px">Tutto in ordine</div>
+          <div class="item-subtitle">Nessun avviso per ora</div>
         </div>
-      `).join('')}
-    `;
+      `;
+    }
   } else {
-    alertsEl.innerHTML = `
-      <div style="background:var(--gradient-card-indigo);border-radius:var(--radius-md);padding:var(--space-xl);text-align:center;margin-bottom:var(--space-md);border:1px solid var(--border)">
-        <div style="width:48px;height:48px;border-radius:var(--radius-full);background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-md)">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="item-title" style="font-size:var(--font-lg);margin-bottom:4px">Tutto in ordine</div>
-        <div class="item-subtitle">Nessun avviso per ora</div>
-      </div>
-    `;
+    alertsEl.innerHTML = '';
   }
 
   const mese = now.toLocaleDateString('it-IT', { month: 'long' });
@@ -362,6 +386,7 @@ async function loadDashboard() {
 
   const hasBuoni = totaleBuoniIniziali > 0 || buoni.length > 0;
 
+  if (!cfg.summary) { summaryEl.innerHTML = ''; } else {
   summaryEl.innerHTML = `
     <div class="section-title">Riepilogo ${meseCapitalized}</div>
     <div class="stat-grid" style="grid-template-columns:${hasBuoni ? '1fr 1fr' : '1fr 1fr 1fr'}">
@@ -391,9 +416,11 @@ async function loadDashboard() {
       </div>
     </div>
   `;
+  }
 
   const recentTx = transazioni.sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, 5);
-  if (recentTx.length > 0) {
+  if (!cfg.recent) { recentEl.innerHTML = ''; }
+  else if (recentTx.length > 0) {
     recentEl.innerHTML = `
       <div class="section-title">Ultime attività</div>
       ${recentTx.map(t => `
@@ -542,4 +569,45 @@ async function checkSpendingAlerts() {
       alertsEl.insertAdjacentHTML('afterbegin', banners.join(''));
     }
   }
+}
+
+// ── Widget Config ──
+
+async function getWidgetConfig() {
+  const cfg = {};
+  for (const [key, def] of Object.entries(WIDGET_DEFAULTS)) {
+    const saved = await db.get('widget_config', key);
+    cfg[key] = saved ? saved.enabled : def.enabled;
+  }
+  return cfg;
+}
+
+async function openWidgetConfig() {
+  const cfg = await getWidgetConfig();
+
+  const body = Object.entries(WIDGET_DEFAULTS).map(([key, def]) => `
+    <label style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border-light);cursor:pointer">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px">${def.emoji}</span>
+        <span style="font-weight:600;font-size:var(--font-md)">${def.label}</span>
+      </div>
+      <input type="checkbox" class="widget-toggle" data-key="${key}" ${cfg[key] ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--accent)">
+    </label>
+  `).join('');
+
+  modal.open('Personalizza Home', `
+    <p style="color:var(--text-secondary);font-size:var(--font-sm);margin-bottom:var(--space-md)">Scegli quali sezioni mostrare nella dashboard</p>
+    <div>${body}</div>
+    <button id="save-widget-cfg" class="btn btn-primary" style="width:100%;margin-top:var(--space-lg);padding:14px;border-radius:var(--radius-md);font-weight:700">Salva</button>
+  `);
+
+  document.getElementById('save-widget-cfg').addEventListener('click', async () => {
+    const toggles = document.querySelectorAll('.widget-toggle');
+    for (const t of toggles) {
+      await db.put('widget_config', { key: t.dataset.key, enabled: t.checked });
+    }
+    modal.close();
+    toast('Widget aggiornati');
+    window.location.reload();
+  });
 }

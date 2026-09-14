@@ -1,6 +1,14 @@
 import * as api from '../api.js';
 import { show as toast } from '../components/toast.js';
 
+function detectServer() {
+  const loc = window.location;
+  if (loc.hostname !== 'localhost' && loc.hostname !== '127.0.0.1' && loc.protocol !== 'file:') {
+    return loc.origin;
+  }
+  return '';
+}
+
 export async function render(container) {
   container.innerHTML = `
     <div class="view-container" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center">
@@ -14,7 +22,8 @@ export async function render(container) {
           <div class="card" style="text-align:left;padding:var(--space-lg)">
             <div class="form-group">
               <label class="form-label">Server</label>
-              <input type="url" id="login-server" class="input-field" placeholder="https://tuoserver.com" value="${localStorage.getItem('focus_api_url') || ''}">
+              <input type="url" id="login-server" class="input-field" placeholder="http://100.x.x.x:3001" value="${localStorage.getItem('focus_api_url') || detectServer()}">
+              <div style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px">IP Tailscale del PC + porta (es. http://100.64.0.1:3001)</div>
             </div>
             <div class="form-group">
               <label class="form-label">Username</label>
@@ -36,7 +45,7 @@ export async function render(container) {
           <div class="card" style="text-align:left;padding:var(--space-lg)">
             <div class="form-group">
               <label class="form-label">Server</label>
-              <input type="url" id="reg-server" class="input-field" placeholder="https://tuoserver.com" value="${localStorage.getItem('focus_api_url') || ''}">
+              <input type="url" id="reg-server" class="input-field" placeholder="http://100.x.x.x:3001" value="${localStorage.getItem('focus_api_url') || detectServer()}">
             </div>
             <div class="form-group">
               <label class="form-label">Nome</label>

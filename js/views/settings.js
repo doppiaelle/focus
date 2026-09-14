@@ -1,4 +1,5 @@
 import * as db from '../db.js';
+import { isLoggedIn, clearAuth } from '../api.js';
 
 const ALL_STORES = ['messages', 'spesa', 'dispensa', 'transazioni', 'eventi', 'scadenze', 'impostazioni', 'buoni_pasto'];
 
@@ -76,11 +77,35 @@ export async function render(container) {
         </button>
       </div>
 
+      <div class="section-title">Account</div>
+      <div class="card">
+        ${isLoggedIn() ? `
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-sm)">
+            <div>
+              <div style="font-weight:600;font-size:var(--font-sm)">Connesso al server</div>
+              <div class="item-subtitle">${localStorage.getItem('focus_api_url') || ''}</div>
+            </div>
+            <span class="badge badge-success">Online</span>
+          </div>
+          <button id="btn-logout" class="btn btn-ghost" style="width:100%;color:var(--danger);justify-content:flex-start">
+            🚪 Disconnetti
+          </button>
+        ` : `
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-weight:600;font-size:var(--font-sm)">Modalità offline</div>
+              <div class="item-subtitle">I dati sono solo su questo dispositivo</div>
+            </div>
+            <a href="#/login" class="btn btn-primary" style="padding:8px 16px;font-size:var(--font-sm)">Accedi</a>
+          </div>
+        `}
+      </div>
+
       <div class="section-title">Info</div>
       <div class="card">
         <div style="text-align:center;padding:var(--space-sm) 0">
           <div style="font-size:var(--font-lg);font-weight:800;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Focus</div>
-          <div class="item-subtitle" style="margin-top:4px">v2.1.0</div>
+          <div class="item-subtitle" style="margin-top:4px">v2.4.0</div>
           <div class="item-subtitle" style="margin-top:8px">Il tuo hub personale intelligente</div>
           <div style="margin-top:12px;font-size:var(--font-xs);color:var(--text-muted);font-weight:600;letter-spacing:0.5px">by DoubleL</div>
         </div>
@@ -159,6 +184,17 @@ export async function render(container) {
   document.getElementById('import-data').addEventListener('click', () => document.getElementById('import-file').click());
   document.getElementById('import-file').addEventListener('change', importData);
   document.getElementById('clear-data').addEventListener('click', clearAllData);
+
+  const logoutBtn = document.getElementById('btn-logout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      if (!confirm('Disconnettersi dal server?')) return;
+      clearAuth();
+      localStorage.removeItem('focus_offline_mode');
+      window.location.hash = '/login';
+      window.location.reload();
+    });
+  }
 }
 
 async function testOllama() {

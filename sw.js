@@ -1,4 +1,4 @@
-const CACHE_NAME = 'focus-v22';
+const CACHE_NAME = 'focus-v23';
 const ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const ASSETS = [
   './js/store.js',
   './js/parser.js',
   './js/ai.js',
+  './js/api.js',
   './js/suggestions.js',
   './js/components/navbar.js',
   './js/components/modal.js',
@@ -23,6 +24,7 @@ const ASSETS = [
   './js/views/agenda.js',
   './js/views/spesa.js',
   './js/views/finanze.js',
+  './js/views/login.js',
   './js/views/settings.js',
   './js/notifications.js',
 ];

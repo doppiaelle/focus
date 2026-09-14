@@ -1,3 +1,5 @@
+import * as api from './api.js';
+
 const DB_NAME = 'nodo';
 const DB_VERSION = 4;
 
@@ -15,6 +17,10 @@ const STORES = {
 };
 
 let dbInstance = null;
+
+function useApi() {
+  return api.isLoggedIn() && navigator.onLine;
+}
 
 function open() {
   if (dbInstance) return Promise.resolve(dbInstance);
@@ -52,40 +58,89 @@ function reqToPromise(req) {
   });
 }
 
-export async function add(storeName, data) {
+async function localAdd(storeName, data) {
   const store = await tx(storeName, 'readwrite');
   return reqToPromise(store.add({ ...data }));
 }
 
-export async function put(storeName, data) {
+async function localPut(storeName, data) {
   const store = await tx(storeName, 'readwrite');
   return reqToPromise(store.put({ ...data }));
 }
 
-export async function get(storeName, id) {
+async function localGet(storeName, id) {
   const store = await tx(storeName);
   return reqToPromise(store.get(id));
 }
 
-export async function getAll(storeName) {
+async function localGetAll(storeName) {
   const store = await tx(storeName);
   return reqToPromise(store.getAll());
 }
 
-export async function del(storeName, id) {
+async function localDel(storeName, id) {
   const store = await tx(storeName, 'readwrite');
   return reqToPromise(store.delete(id));
 }
 
-export async function clear(storeName) {
+async function localClear(storeName) {
   const store = await tx(storeName, 'readwrite');
   return reqToPromise(store.clear());
 }
 
-export async function getByIndex(storeName, indexName, value) {
+async function localGetByIndex(storeName, indexName, value) {
   const store = await tx(storeName);
   const index = store.index(indexName);
   return reqToPromise(index.getAll(value));
+}
+
+export async function add(storeName, data) {
+  if (useApi()) {
+    try { return await api.add(storeName, data); } catch {}
+  }
+  return localAdd(storeName, data);
+}
+
+export async function put(storeName, data) {
+  if (useApi()) {
+    try { return await api.put(storeName, data); } catch {}
+  }
+  return localPut(storeName, data);
+}
+
+export async function get(storeName, id) {
+  if (useApi()) {
+    try { return await api.get(storeName, id); } catch {}
+  }
+  return localGet(storeName, id);
+}
+
+export async function getAll(storeName) {
+  if (useApi()) {
+    try { return await api.getAll(storeName); } catch {}
+  }
+  return localGetAll(storeName);
+}
+
+export async function del(storeName, id) {
+  if (useApi()) {
+    try { return await api.del(storeName, id); } catch {}
+  }
+  return localDel(storeName, id);
+}
+
+export async function clear(storeName) {
+  if (useApi()) {
+    try { return await api.clear(storeName); } catch {}
+  }
+  return localClear(storeName);
+}
+
+export async function getByIndex(storeName, indexName, value) {
+  if (useApi()) {
+    try { return await api.getByIndex(storeName, indexName, value); } catch {}
+  }
+  return localGetByIndex(storeName, indexName, value);
 }
 
 export async function getSetting(key) {

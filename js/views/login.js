@@ -16,6 +16,7 @@ export async function render(container) {
         <div style="margin-bottom:var(--space-xl)">
           <div style="font-size:48px;font-weight:900;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Focus</div>
           <p style="color:var(--text-secondary);margin-top:8px;font-size:var(--font-md)">by DoubleL</p>
+          <p style="color:var(--text-muted);margin-top:4px;font-size:var(--font-xs)">doppiaelletech@gmail.com</p>
         </div>
 
         <div id="login-form">
@@ -72,7 +73,12 @@ export async function render(container) {
         </div>
 
         <div style="margin-top:var(--space-lg)">
-          <button id="btn-offline" class="btn btn-ghost" style="font-size:var(--font-sm);color:var(--text-muted)">Usa senza account (solo locale)</button>
+          <div class="card" style="padding:var(--space-lg);text-align:center;background:var(--gradient-card-green);border:1px solid var(--border)">
+            <div style="font-size:24px;margin-bottom:var(--space-sm)">📱</div>
+            <div style="font-weight:700;font-size:var(--font-md);margin-bottom:4px">Usa subito</div>
+            <p style="font-size:var(--font-xs);color:var(--text-secondary);margin-bottom:var(--space-md)">I dati restano su questo dispositivo. Nessun account richiesto.</p>
+            <button id="btn-offline" class="btn btn-primary" style="width:100%;padding:12px;border-radius:var(--radius-md);font-weight:700;background:var(--success);border-color:var(--success)">Inizia senza account</button>
+          </div>
         </div>
       </div>
     </div>

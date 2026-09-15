@@ -107,7 +107,10 @@ export async function render(container) {
           <div style="font-size:var(--font-lg);font-weight:800;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Focus</div>
           <div class="item-subtitle" style="margin-top:4px">v2.4.0</div>
           <div class="item-subtitle" style="margin-top:8px">Il tuo hub personale intelligente</div>
-          <div style="margin-top:12px;font-size:var(--font-xs);color:var(--text-muted);font-weight:600;letter-spacing:0.5px">by DoubleL</div>
+          <div style="margin-top:var(--space-md);padding-top:var(--space-md);border-top:1px solid var(--border-light)">
+            <div style="font-size:var(--font-sm);font-weight:700;letter-spacing:0.5px">by DoubleL</div>
+            <a href="mailto:doppiaelletech@gmail.com" style="font-size:var(--font-xs);color:var(--accent);text-decoration:none;margin-top:4px;display:inline-block">doppiaelletech@gmail.com</a>
+          </div>
         </div>
       </div>
     </div>

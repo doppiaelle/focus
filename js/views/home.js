@@ -95,7 +95,7 @@ function showWelcomeCard() {
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
       </div>
       <h2>Benvenuto in Focus</h2>
-      <p>Il tuo hub personale by <strong>DoubleL</strong>. Gestisci spesa, appuntamenti e finanze — tutto in un posto. Inizia aggiungendo qualcosa!</p>
+      <p>Il tuo hub personale by <strong>DoubleL</strong>. Spesa, agenda, finanze e chat AI — tutto in un posto. Inizia aggiungendo qualcosa!</p>
       <div style="display:flex;gap:var(--space-sm);justify-content:center;flex-wrap:wrap;margin-top:var(--space-md)">
         <a href="#/spesa" class="btn btn-primary" style="border-radius:var(--radius-full);padding:12px 24px">
           🛒 Lista spesa

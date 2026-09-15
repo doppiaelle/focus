@@ -32,8 +32,17 @@ const PRODUCT_EMOJIS = {
   gelato: '🍦', cioccolato: '🍫', cioccolata: '🍫', nutella: '🍫',
   marmellata: '🍯', miele: '🍯', merendine: '🧁', patatine: '🍟', caramelle: '🍬',
   detersivo: '🧴', sapone: '🧼', shampoo: '🧴', carta: '🧻', scottex: '🧻',
-  fazzoletti: '🤧', pannolini: '👶', tovaglioli: '🧻', spugna: '🧽',
+  fazzoletti: '🤧', pannolini: '👶', tovaglioli: '🧻', spugna: '🧽', spugne: '🧽',
   candeggina: '🧪', ammorbidente: '🧴', dentifricio: '🪥', bagnoschiuma: '🛁',
+  sacchetti: '🗑️', pellicola: '🎞️', alluminio: '🫙',
+  olio: '🫒', aceto: '🫗', sale: '🧂', pepe: '🌶️', zucchero: '🍬',
+  passata: '🥫', pelati: '🥫', dado: '🧊', maionese: '🥫', ketchup: '🥫',
+  senape: '🥫', pesto: '🌿', sugo: '🍝', olive: '🫒', sottoli: '🫙',
+  piselli: '🟢', bastoncini: '🐟', minestrone: '🥣', gnocchi: '🥟', tortellini: '🥟',
+  kiwi: '🥝', spinaci: '🥬', broccoli: '🥦', avocado: '🥑',
+  mascarpone: '🧀', stracchino: '🧀', philadelphia: '🧀',
+  brioche: '🥐', croissant: '🥐', popcorn: '🍿',
+  fette: '🍞', grissini: '🥖', piadina: '🫓',
 };
 
 const PRODUCT_CATEGORIES = {
@@ -42,8 +51,10 @@ const PRODUCT_CATEGORIES = {
   'Carne e Pesce': ['pollo','carne','pesce','tonno','salmone','gamberi','salsiccia','salsicce','hamburger','bacon','pancetta','prosciutto','salame','wurstel','vitello','maiale','manzo','bresaola'],
   'Pane e Pasta': ['pane','pasta','riso','farina','biscotti','biscotto','cereali','pizza','grissini','cracker','piadina'],
   'Bevande': ['acqua','birra','vino','caffe','caffè','te','tè','succo','coca','cola','bottiglia','bottiglie','lattina','lattine','aranciata','limonata'],
-  'Dolci e Snack': ['gelato','cioccolato','cioccolata','nutella','marmellata','miele','merendine','patatine','caramelle'],
-  'Casa e Igiene': ['detersivo','sapone','shampoo','carta','scottex','fazzoletti','pannolini','tovaglioli','spugna','candeggina','ammorbidente','dentifricio','bagnoschiuma'],
+  'Dolci e Snack': ['gelato','cioccolato','cioccolata','nutella','marmellata','miele','merendine','patatine','caramelle','brioche','croissant','popcorn'],
+  'Condimenti e Conserve': ['olio','aceto','sale','pepe','zucchero','passata','pelati','dado','maionese','ketchup','senape','pesto','sugo','olive','sottoli'],
+  'Surgelati': ['piselli surgelati','spinaci surgelati','bastoncini','minestrone','pizza surgelata','patatine fritte','verdure grigliate'],
+  'Casa e Igiene': ['detersivo','sapone','shampoo','carta','scottex','fazzoletti','pannolini','tovaglioli','spugna','spugne','candeggina','ammorbidente','dentifricio','bagnoschiuma','sacchetti','pellicola','alluminio'],
 };
 
 function getProductEmoji(name) {
@@ -84,9 +95,9 @@ export async function render(container) {
       </div>
       <div id="spesa-suggestions"></div>
       <div id="spesa-tabs" style="display:flex;gap:var(--space-xs);margin-bottom:var(--space-md)">
-        <button class="spesa-tab active" data-tab="lista" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none">Lista</button>
-        <button class="spesa-tab" data-tab="catalogo" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Catalogo</button>
-        <button class="spesa-tab" data-tab="dispensa" style="flex:1;padding:10px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light)">Dispensa</button>
+        <button class="spesa-tab active" data-tab="lista" style="flex:1;padding:10px 6px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--accent);color:#fff;border:none;text-align:center;line-height:1.3">🛒 Da comprare</button>
+        <button class="spesa-tab" data-tab="catalogo" style="flex:1;padding:10px 6px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light);text-align:center;line-height:1.3">📋 Catalogo</button>
+        <button class="spesa-tab" data-tab="dispensa" style="flex:1;padding:10px 6px;border-radius:var(--radius-md);font-weight:600;font-size:var(--font-sm);transition:all 0.2s;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light);text-align:center;line-height:1.3">🏠 In casa</button>
       </div>
       <div id="spesa-content"></div>
     </div>
@@ -209,7 +220,13 @@ async function loadLista() {
     contentEl.innerHTML = `
       <div class="empty-state">
         <div class="icon">🛒</div>
-        <p>Nessun prodotto nella lista.<br>Aggiungine uno o scrivi in chat!<br><br>Prova: "compra pane, latte e uova"</p>
+        <p style="font-weight:600;font-size:var(--font-md);margin-bottom:8px">Nessun prodotto da comprare</p>
+        <p style="color:var(--text-secondary);font-size:var(--font-sm);line-height:1.6">
+          Aggiungi prodotti dal <strong>Catalogo</strong> con un tocco,<br>
+          oppure usa il <strong>+</strong> in basso per aggiungere a mano.<br><br>
+          Quando li compri, spuntali e finiscono<br>
+          automaticamente nella sezione <strong>In casa</strong>.
+        </p>
       </div>
     `;
     return;
@@ -231,8 +248,8 @@ async function loadLista() {
     const catOrder = [...Object.keys(PRODUCT_CATEGORIES), 'Altro'];
     const catIcons = {
       'Frutta e Verdura': '🥬', 'Latticini e Uova': '🥛', 'Carne e Pesce': '🥩',
-      'Pane e Pasta': '🍞', 'Bevande': '🥤', 'Dolci e Snack': '🍫',
-      'Casa e Igiene': '🧴', 'Altro': '📦'
+      'Pane e Pasta': '🍞', 'Condimenti e Conserve': '🫒', 'Surgelati': '🧊',
+      'Bevande': '🥤', 'Dolci e Snack': '🍫', 'Casa e Igiene': '🧴', 'Altro': '📦'
     };
 
     for (const cat of catOrder) {
@@ -642,7 +659,13 @@ async function loadDispensa() {
     contentEl.innerHTML = `
       <div class="empty-state">
         <div class="icon">🏠</div>
-        <p>La dispensa è vuota.<br>Racconta i tuoi acquisti in chat o completa prodotti dalla lista!</p>
+        <p style="font-weight:600;font-size:var(--font-md);margin-bottom:8px">Niente in casa (per ora)</p>
+        <p style="color:var(--text-secondary);font-size:var(--font-sm);line-height:1.6">
+          Qui vedi cosa hai in casa e quanto ne resta.<br><br>
+          Si riempie da sola: quando spunti un prodotto<br>
+          dalla lista <strong>Da comprare</strong>, arriva qui.<br>
+          Quando finisce, ti suggerisce di ricomprarlo.
+        </p>
       </div>
     `;
     return;
@@ -787,19 +810,21 @@ async function editDispensaItem(id) {
 // ── Catalogo ──
 
 const CATALOG = {
-  'Frutta e Verdura': ['Banane','Mele','Arance','Limoni','Fragole','Pere','Pomodori','Patate','Cipolle','Carote','Zucchine','Insalata','Peperoni','Melanzane','Aglio'],
-  'Latticini e Uova': ['Latte','Yogurt','Mozzarella','Formaggio','Burro','Uova','Panna','Ricotta','Parmigiano'],
-  'Carne e Pesce': ['Pollo','Carne macinata','Tonno','Salmone','Prosciutto','Pancetta','Salsicce','Bresaola'],
-  'Pane e Pasta': ['Pane','Pasta','Riso','Farina','Biscotti','Cereali','Cracker','Pizza'],
-  'Bevande': ['Acqua','Latte','Succo','Birra','Vino','Caffe','Te'],
-  'Dolci e Snack': ['Cioccolato','Nutella','Gelato','Marmellata','Miele','Patatine'],
-  'Casa e Igiene': ['Detersivo','Sapone','Shampoo','Carta igienica','Scottex','Dentifricio','Bagnoschiuma','Fazzoletti'],
+  'Frutta e Verdura': ['Banane','Mele','Arance','Limoni','Fragole','Pere','Uva','Anguria','Melone','Pesche','Kiwi','Pomodori','Patate','Cipolle','Carote','Zucchine','Insalata','Peperoni','Melanzane','Aglio','Broccoli','Spinaci','Funghi','Avocado','Mais'],
+  'Latticini e Uova': ['Latte','Yogurt','Mozzarella','Formaggio','Burro','Uova','Panna','Ricotta','Parmigiano','Grana','Mascarpone','Stracchino','Philadelphia'],
+  'Carne e Pesce': ['Pollo','Carne macinata','Tonno','Salmone','Prosciutto','Pancetta','Salsicce','Bresaola','Vitello','Maiale','Gamberi','Wurstel','Salame','Hamburger'],
+  'Pane e Pasta': ['Pane','Pasta','Riso','Farina','Biscotti','Cereali','Cracker','Pizza','Grissini','Piadina','Fette biscottate','Tortellini','Gnocchi'],
+  'Condimenti e Conserve': ['Olio','Aceto','Sale','Pepe','Zucchero','Passata','Pelati','Dado','Maionese','Ketchup','Senape','Pesto','Sugo pronto','Olive','Sottoli'],
+  'Surgelati': ['Piselli surgelati','Spinaci surgelati','Bastoncini pesce','Minestrone','Pizza surgelata','Gelato','Patatine fritte','Verdure grigliate'],
+  'Bevande': ['Acqua','Succo','Birra','Vino','Caffe','Te','Coca Cola','Aranciata','Limonata','Latte vegetale'],
+  'Dolci e Snack': ['Cioccolato','Nutella','Marmellata','Miele','Patatine','Merendine','Caramelle','Brioche','Croissant','Popcorn'],
+  'Casa e Igiene': ['Detersivo piatti','Detersivo lavatrice','Sapone mani','Shampoo','Carta igienica','Scottex','Dentifricio','Bagnoschiuma','Fazzoletti','Spugne','Candeggina','Ammorbidente','Sacchetti spazzatura','Pellicola','Alluminio'],
 };
 
 const catIcons = {
   'Frutta e Verdura': '🥬', 'Latticini e Uova': '🥛', 'Carne e Pesce': '🥩',
-  'Pane e Pasta': '🍞', 'Bevande': '🥤', 'Dolci e Snack': '🍫',
-  'Casa e Igiene': '🧴',
+  'Pane e Pasta': '🍞', 'Condimenti e Conserve': '🫒', 'Surgelati': '🧊',
+  'Bevande': '🥤', 'Dolci e Snack': '🍫', 'Casa e Igiene': '🧴',
 };
 
 async function loadCatalogo() {
@@ -817,7 +842,15 @@ async function loadCatalogo() {
   }
 
   subtitleEl.textContent = 'Tocca per aggiungere alla lista';
-  contentEl.innerHTML = '';
+  contentEl.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px var(--space-md);background:var(--gradient-card-indigo);border-radius:var(--radius-md);border:1px solid var(--border);margin-bottom:var(--space-md)">
+      <span style="font-size:20px">👆</span>
+      <div style="font-size:var(--font-xs);color:var(--text-secondary);line-height:1.5">
+        Tocca un prodotto per aggiungerlo alla lista <strong style="color:var(--text-primary)">Da comprare</strong>.
+        I prodotti <span style="color:var(--danger)">rossi</span> sono finiti, quelli <span style="color:var(--warning)">gialli</span> stanno per finire.
+      </div>
+    </div>
+  `;
 
   for (const [cat, products] of Object.entries(CATALOG)) {
     const icon = catIcons[cat] || '📦';

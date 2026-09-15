@@ -11,9 +11,7 @@ cd /d "%~dp0"
 
 REM Porta diversa da start.bat, cosi' sorgente e container possono stare
 REM accesi insieme. Dentro il container il server ascolta sempre sulla 3001
-REM (vedi Containerfile) -- qui si cambia solo la mappatura esterna, e si
-REM sceglie 3006 per restare fuori dalla fascia 3001-3003 gia' affollata
-REM (LL, vulntracker).
+REM (vedi Containerfile) -- qui si cambia solo la mappatura esterna.
 set "PORTA=3006"
 if defined FOCUS_PORTA_CONTAINER set "PORTA=%FOCUS_PORTA_CONTAINER%"
 set "VOLUME=focus-data"

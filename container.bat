@@ -7,7 +7,8 @@ REM
 REM Gira in primo piano di proposito: chiudere la finestra ferma il server,
 REM come per ogni altra modalita'. Il volume resta, quindi i dati no.
 setlocal
-cd /d "%~dp0"
+set "ROOT=%~dp0"
+cd /d "%ROOT%"
 
 REM Porta diversa da start.bat, cosi' sorgente e container possono stare
 REM accesi insieme. Dentro il container il server ascolta sempre sulla 3001
@@ -25,7 +26,7 @@ where podman >nul 2>&1 || goto :niente_podman
 
 REM Ferma solo un container omonimo rimasto acceso: il server dal sorgente ha
 REM una porta sua e non c'entra niente.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0stop.ps1" -Porta %PORTA% -SoloContainer || goto :porta_occupata
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%stop.ps1" -Porta %PORTA% -SoloContainer || goto :porta_occupata
 
 echo [container] volume %VOLUME%
 podman volume exists %VOLUME%

@@ -8,7 +8,8 @@ REM il backend serve i file statici solo se trova una cartella "dist" (vedi
 REM server.js), che qui non esiste ancora. Per ora il frontend resta un
 REM discorso separato -- questo avvia solo le API.
 setlocal
-cd /d "%~dp0backend"
+set "ROOT=%~dp0"
+cd /d "%ROOT%backend"
 
 REM La 3001 su questa macchina e' gia' contesa (dashboard di LL, "dev" di
 REM vulntracker): Focus sta piu' in la', dove nessun altro progetto arriva.
@@ -18,11 +19,11 @@ if defined FOCUS_PORTA set "PORTA=%FOCUS_PORTA%"
 REM Libera la SOLA porta di questo avvio: un'istanza precedente rimasta
 REM appesa farebbe fallire il bind con un errore poco leggibile. Il container
 REM ha una porta sua e resta acceso: accendere uno non deve spegnere l'altro.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0stop.ps1" -Porta %PORTA% || goto :porta_occupata
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%stop.ps1" -Porta %PORTA% || goto :porta_occupata
 
 if not exist "node_modules" (
     echo [start] dipendenze assenti: eseguo build.bat
-    call "%~dp0build.bat" || goto :errore
+    call "%ROOT%build.bat" || goto :errore
 )
 
 if not exist ".env" (
